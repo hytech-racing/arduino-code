@@ -96,13 +96,13 @@ void loop() {
 
         potAccAdjDiff = abs(pot2ValAdjusted-pot1ValAdjusted);//Get difference between torque sensors
         if(potAccAdjDiff > 100){//Acceleration error check (Die if 10%+ difference between readings)
-            shutdownHard(2);//2 means acceleration implausibility
+            sendHardShutdown(2);//2 means acceleration implausibility
         }else {
             torqueVal = (int)((pot1ValAdjusted + pot2ValAdjusted)/2);
             if(pot3ValAdjusted > 0 && torqueVal >= 250) {//If brake pressed and torque pressed over 25%
                 brakePlausActive = true;
             }else {
-                if(brakePlausActive && torqueVal < 50) {//Motor deactivated but torque less than 5%
+                if(brakePlausActive && torqueVal < 50) {//Motor deactivated but torque less than 5% (required before disabling brake plausibility)
                     brakePlausActive = false;
                 }
                 if(!brakePlausActive) {//If brake plausibility is not active
@@ -113,11 +113,8 @@ void loop() {
             }
         }
         if(bmsPowerValue >= 5){//If brake is pressed hard and BMS says 5kW of power (BMS arduino needs to send that value to this arduino)
-            shutdownHard(3);//3 means too much power
+            sendHardShutdown(3);//3 means too much power
             //todo might not be receiving value in kW units
-        }
-        if(pot3Val ){//todo brake plausibility check
-
         }
         //todo brake over travel?
         if(false && regenActive == false){//Regeneration //todo what activates this?
@@ -131,8 +128,11 @@ void loop() {
         }
 
     }
-    if (timeoutRx < millis()) {//If 1 second has passed since receiving a complete command ***SOMETHING HAS GONE WRONG***
-        shutdownHard(1);//1 means lost communication
+    if (timeoutRx < millis()) {//If 1 second has passed since receiving a complete command send shutdown command
+        Serial.println(millis());
+        Serial.println("ar2 lost connection to ar1");
+        sendHardShutdown(1);//1 means lost communication
+        //todo this might make no sense because it is sending a shutdown signal when communication is messed up
     }
 }
 
@@ -148,16 +148,16 @@ void Serial1Event() {
     }
 }
 
-void shutdownHard(int errCode) {
+void sendHardShutdown(int errCode) {
     /*
     Error codes:
     1. Lost communication
     2. Acceleration implausibility
     3. Too much power (>=5kW)
     */
-    String shutdownError = "ERROR SHUTDOWN HARD - ";
-    Serial.println(shutdownError + errCode);
+    String shutdownError = "ar2:kill:";
+    Serial1.println(shutdownError + errCode);//Send to arduino first
+    Serial.println(shutdownError + errCode);//Now send to computer
     //todo should error code be always in same address?
     EEPROM.write(0,(char)errCode);
-    //todo open circuit to shut down
 }

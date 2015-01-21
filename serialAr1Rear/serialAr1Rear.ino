@@ -1,11 +1,38 @@
 /*
 Arduino 1
 Type: Mega
-Use: Telay communication between other Arduinos, activate brake light,
+Use: Relay communication between other Arduinos, activate brake light, catch emergency shutoff button presses,
 */
 
-int ledPinBrake = 12;
-int ledPinErr = 13;
+/*************************************
+BEGIN CONFIGURATION
+*************************************/
+
+int digitalRelay1 = 2;
+int digitalRelay2 = 3;
+int digitalRelay3 = 4;
+int digitalRelay4 = 5;
+int digitalRelay5 = 6;
+int digitalRelay6 = 7;
+int digitalImd1 = 9;
+int digitalImd2 = 10;
+int digitalBrake = 29;
+int digitalReady2Drive = 31;
+int analogPumpStatus = 5;
+int analogCheckInertia = 6;
+int analogCheckCockpit = 7;
+int analogCheckBots = 8;
+int analogCheckTsms = 9;
+int analogCheckDcDc = 10;
+int analogBms1 = 11;
+int analogBms2 = 12;
+int analogBms3 = 13;
+int analogBms4 = 14;
+int analogBms5 = 15;
+
+/*************************************
+END CONFIGURATION
+*************************************/
 
 String inputCmd2 = "";
 String inputCmd3 = "";
@@ -23,8 +50,8 @@ void setup() {
   inputCmd2.reserve(50);
   inputCmd3.reserve(50);
 
-  pinMode(ledPinBrake, OUTPUT);
-  pinMode(ledPinErr, OUTPUT);
+  pinMode(digitalBrake, OUTPUT);
+  pinMode(digitalReady2Drive, OUTPUT);
 
   //Wait 1 second for communication before throwing error
   timeoutRx2 = 1000;
@@ -34,48 +61,48 @@ void setup() {
 
 
 void loop() {
-  if (stringComplete2) {//Received command from AR2
-    if (inputCmd2.substring(0,3) == "ar3") {//Is this command meant for Arduino 3?
-      Serial3.println(inputCmd2);//todo this is untested
-      Serial.println("Relayed from ar2 to ar3: "+inputCmd2);
-    }
+    if (stringComplete2) {//Received command from AR2
+        if (inputCmd2.substring(0,3) == "ar3") {//Is this command meant for Arduino 3?
+            Serial3.println(inputCmd2);//todo this is untested
+            Serial.println("Relayed from ar2 to ar3: "+inputCmd2);
+        }
     else if (inputCmd2.substring(0,12) == "ar1:led:brake:") {//Is this a command to AR1 LED BRAKE?
-      String subCmd = inputCmd2.substring(14,15);
-      if (subCmd == "1") {//1 for on
-        digitalWrite(ledPinBrake, HIGH);
-      }else if (subCmd == "0") {//0 for off
-        digitalWrite(ledPinBrake, LOW);
-      }
+        String subCmd = inputCmd2.substring(14,15);
+        if (subCmd == "1") {//1 for on
+            digitalWrite(digitalBrake, HIGH);
+        }else if (subCmd == "0") {//0 for off
+            digitalWrite(digitalBrake, LOW);
+        }
     }
     inputCmd2 = "";
     stringComplete2 = false;
-  }
-  if (stringComplete3) {//Received command from AR3
-    if (inputCmd3.substring(0,3) == "ar2") {//Is this command meant for Arduino 2?
-      Serial2.println(inputCmd3);//todo this is untested
-      Serial.println("Relayed from ar3 to ar2: "+inputCmd3);
     }
-    inputCmd3 = "";
-    stringComplete3 = false;
-  }
-  if (runLoop < millis()) {//Runs 10x per second
-    runLoop = millis() + 100;//Push runLoop up 100 ms
-    //todo Anything this Arduino needs to do other than process received data
-  }
-  if (timeoutRx2 < millis() || timeoutRx3 < millis()) {//If 1 second has passed since receiving a complete command from both Arduinos turn off low voltage ***SOMETHING HAS GONE WRONG***
-    //todo Code to shutdown
-    //For now, activate LED and print error
-    Serial.println(millis());
-    if(timeoutRx2 < millis()) {
-      Serial.println("ar1 lost connection to ar2");
+    if (stringComplete3) {//Received command from AR3
+        if (inputCmd3.substring(0,3) == "ar2") {//Is this command meant for Arduino 2?
+            Serial2.println(inputCmd3);//todo this is untested
+            Serial.println("Relayed from ar3 to ar2: "+inputCmd3);
+        }
+        inputCmd3 = "";
+        stringComplete3 = false;
     }
-    if(timeoutRx3 < millis()) {
-      Serial.println("ar1 lost connection to ar3");
+    if (runLoop < millis()) {//Runs 10x per second
+        runLoop = millis() + 100;//Push runLoop up 100 ms
+        //todo Anything this Arduino needs to do other than process received data
     }
-    digitalWrite(ledPinErr, HIGH);
-  } else {
-    digitalWrite(ledPinErr, LOW);
-  }
+    if (timeoutRx2 < millis() || timeoutRx3 < millis()) {//If 1 second has passed since receiving a complete command from both Arduinos turn off low voltage ***SOMETHING HAS GONE WRONG***
+        //todo Code to shutdown
+        //For now, activate LED and print error
+        Serial.println(millis());
+        if(timeoutRx2 < millis()) {
+            Serial.println("ar1 lost connection to ar2");
+        }
+        if(timeoutRx3 < millis()) {
+            Serial.println("ar1 lost connection to ar3");
+        }
+        digitalWrite(digitalErr, HIGH);
+    } else {
+        digitalWrite(digitalErr, LOW);
+    }
 }
 
 void serialEvent2() {//Receive bytes from AR2
@@ -102,4 +129,9 @@ void serialEvent3() {//Receive bytes from AR3
       inputCmd3 += newChar;
     }
   }
+}
+
+void shutdownHard(int errCode) {
+    //todo activate relay to shutdown
+
 }
