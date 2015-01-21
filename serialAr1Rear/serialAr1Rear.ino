@@ -1,10 +1,10 @@
 /*
 Arduino 1
 Type: Mega
-Use: Talk to Motor Controller and relay communication between 2 other Arduinos
+Use: Telay communication between other Arduinos, activate brake light,
 */
 
-int ledPinGrn = 4;
+int ledPinBrake = 12;
 int ledPinErr = 13;
 
 String inputCmd2 = "";
@@ -22,10 +22,10 @@ void setup() {
   Serial3.begin(115200);
   inputCmd2.reserve(50);
   inputCmd3.reserve(50);
-  
-  pinMode(ledPinGrn, OUTPUT);
+
+  pinMode(ledPinBrake, OUTPUT);
   pinMode(ledPinErr, OUTPUT);
-  
+
   //Wait 1 second for communication before throwing error
   timeoutRx2 = 1000;
   timeoutRx3 = 1000;
@@ -39,12 +39,12 @@ void loop() {
       Serial3.println(inputCmd2);//todo this is untested
       Serial.println("Relayed from ar2 to ar3: "+inputCmd2);
     }
-    else if (inputCmd2.substring(0,12) == "ar1:led:grn:") {//Is this a command to AR1 LED GRN?
-      String subCmd = inputCmd2.substring(12,13);
+    else if (inputCmd2.substring(0,12) == "ar1:led:brake:") {//Is this a command to AR1 LED BRAKE?
+      String subCmd = inputCmd2.substring(14,15);
       if (subCmd == "1") {//1 for on
-        digitalWrite(ledPinGrn, HIGH);
-      }else if (subCmd == "0") {//2 for off
-        digitalWrite(ledPinGrn, LOW);
+        digitalWrite(ledPinBrake, HIGH);
+      }else if (subCmd == "0") {//0 for off
+        digitalWrite(ledPinBrake, LOW);
       }
     }
     inputCmd2 = "";
