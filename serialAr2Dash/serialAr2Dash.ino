@@ -70,6 +70,11 @@ void setup() {
     //Wait 1 second for communication before throwing error
     timeoutRx = 1000;
     runLoop = 0;
+    bool ready2Run = false;
+
+    while (!ready2Run) {
+
+    }
 }
 
 void loop() {

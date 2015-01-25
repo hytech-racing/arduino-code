@@ -14,11 +14,15 @@ int digitalRelay3 = 4;
 int digitalRelay4 = 5;
 int digitalRelay5 = 6;
 int digitalRelay6 = 7;
-int digitalLedErr = 8;//We might not need this
 int digitalImd1 = 9;
 int digitalImd2 = 10;
+int digitalLedErr = 13;//We might not need this
 int digitalBrake = 29;
-int digitalReady2Drive = 31;
+int digitalReady2DriveSound = 31;
+int analogImdFaultReset = 0;
+int analogBmsFaultReset = 1;
+int analogMotorCtrlTemp = 2;
+int analogWaterTemp = 3;
 int analogPumpStatus = 5;
 int analogCheckInertia = 6;
 int analogCheckCockpit = 7;
@@ -50,14 +54,52 @@ void setup() {
   Serial3.begin(115200);
   inputCmd2.reserve(50);
   inputCmd3.reserve(50);
-
+  //Initialize output pins
+  pinMode(digitalRelay1, OUTPUT);
+  pinMode(digitalRelay2, OUTPUT);
+  pinMode(digitalRelay3, OUTPUT);
+  pinMode(digitalRelay4, OUTPUT);
+  pinMode(digitalRelay5, OUTPUT);
+  pinMode(digitalRelay6, OUTPUT);
+  pinMode(digitalImd1, OUTPUT);
+  pinMode(digitalImd2, OUTPUT);
+  pinMode(digitalLedErr, OUTPUT);
   pinMode(digitalBrake, OUTPUT);
-  pinMode(digitalReady2Drive, OUTPUT);
+  pinMode(digitalReady2DriveSound, OUTPUT);
+  //Initialize input pins
+  pinMode(analogImdFaultReset, INPUT);
+  pinMode(analogBmsFaultReset, INPUT);
+  pinMode(analogMotorCtrlTemp, INPUT);
+  pinMode(analogWaterTemp, INPUT);
+  pinMode(analogPumpStatus, INPUT);
+  pinMode(analogCheckInertia, INPUT);
+  pinMode(analogCheckCockpit, INPUT);
+  pinMode(analogCheckBots, INPUT);
+  pinMode(analogCheckTsms, INPUT);
+  pinMode(analogCheckDcDc, INPUT);
+  pinMode(analogBms1, INPUT);
+  pinMode(analogBms2, INPUT);
+  pinMode(analogBms3, INPUT);
+  pinMode(analogBms4, INPUT);
+  pinMode(analogBms5, INPUT);
 
   //Wait 1 second for communication before throwing error
   timeoutRx2 = 1000;
   timeoutRx3 = 1000;
   runLoop = 0;
+
+  bool ready2Run;
+  //Check if EEPROM error code was set
+  char eepromErrCode = EEPROM.read(0);
+
+  if (eepromErrCode == 0xFF){
+      ready2Run = true;
+  }
+  while (!ready2Run) {
+      //todo analog read fault reset switches
+      Serial.println("Shutoff error code: "+eepromErrCode+", must reset");//Send to computer
+      Serial1.println("ar3:waitErr");//So ar1 and ar3 are receiving something on serial
+  }
 }
 
 
