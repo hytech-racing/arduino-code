@@ -7,6 +7,7 @@ Use: Relay communication between other Arduinos, activate brake light, catch eme
 /*************************************
 BEGIN CONFIGURATION
 *************************************/
+#include <EEPROM.h>;
 
 int digitalRelay1 = 2;
 int digitalRelay2 = 3;
@@ -96,6 +97,8 @@ void setup() {
       ready2Run = true;
   }
   while (!ready2Run) {
+      //todo if eepromerrcode == 1 (BMS)
+      //todo if eepromerrcode == 2 (IMD)
       //todo analog read fault reset switches
       Serial.println("Shutoff error code: "+eepromErrCode+", must reset");//Send to computer
       Serial1.println("ar3:waitErr");//So ar1 and ar3 are receiving something on serial
@@ -175,6 +178,13 @@ void serialEvent3() {//Receive bytes from AR3
 }
 
 void shutdownHard(int errCode) {
+    /*
+    Error codes:
+    1. BMS
+    2. IMD
+    */
+    if(errCode){
+        EEPROM.write(0,(char)errCode);
+    }
     //todo activate relay to shutdown
-
 }

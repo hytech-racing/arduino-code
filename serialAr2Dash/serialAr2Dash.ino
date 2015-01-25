@@ -7,7 +7,6 @@ Use: Read and process pedal values, show values on LCD
 /*************************************
 BEGIN CONFIGURATION
 *************************************/
-#include <EEPROM.h>;
 
 //Extended pot is low resistance
 //todo set these pins to which pins are being used
@@ -155,13 +154,12 @@ void Serial1Event() {
 void sendHardShutdown(int errCode) {
     /*
     Error codes:
-    1. Lost communication
-    2. Acceleration implausibility
-    3. Too much power (>=5kW)
+    3. Lost communication
+    4. Acceleration implausibility
+    5. Too much power (>=5kW)
     */
-    String shutdownError = "ar2:kill:";
+    String shutdownError = "ar1:kill";
+    EEPROM.write(0,(char)errCode);//Only for our purposes, these shutoffs ARE driver resetable
     Serial1.println(shutdownError + errCode);//Send to arduino first
     Serial.println(shutdownError + errCode);//Now send to computer
-    //todo should error code be always in same address?
-    EEPROM.write(0,(char)errCode);
 }
