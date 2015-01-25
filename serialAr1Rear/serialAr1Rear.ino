@@ -100,7 +100,7 @@ void setup() {
       //todo if eepromerrcode == 1 (BMS)
       //todo if eepromerrcode == 2 (IMD)
       //todo analog read fault reset switches
-      Serial.println("Shutoff error code: "+eepromErrCode+", must reset");//Send to computer
+      Serial.println("Shutoff error code (must reset): " + eepromErrCode);//Send to computer
       Serial1.println("ar3:waitErr");//So ar1 and ar3 are receiving something on serial
   }
 }

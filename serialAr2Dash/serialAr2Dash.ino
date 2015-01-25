@@ -7,6 +7,7 @@ Use: Read and process pedal values, show values on LCD
 /*************************************
 BEGIN CONFIGURATION
 *************************************/
+#include <EEPROM.h>;
 
 //Extended pot is low resistance
 //todo set these pins to which pins are being used
