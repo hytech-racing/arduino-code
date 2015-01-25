@@ -66,7 +66,6 @@ void setup() {
     Serial.begin(115200);//Talk back to computer
     Serial1.begin(115200);//Talk to ar1
     inputCmd.reserve(50);
-    pinMode(ledPinBrake,OUTPUT);//Used for brake light
     pinMode(ledPinErr,OUTPUT);
     //Wait 1 second for communication before throwing error
     timeoutRx = 1000;
@@ -88,7 +87,7 @@ void loop() {
         pot2ValAdjusted = (1000/pot2Range)*(analogRead(pot2)-pot2Low);
         pot3ValAdjusted = (1000/pot3Range)*(analogRead(pot3)-pot3Low);
 
-        if(pot3Val < pot3High) { //Brake light
+        if(pot3ValAdjusted < pot3High) { //Brake light
             Serial1.println("ar1:brake:1");
         }else {
             Serial1.println("ar1:brake:0");

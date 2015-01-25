@@ -14,6 +14,7 @@ int digitalRelay3 = 4;
 int digitalRelay4 = 5;
 int digitalRelay5 = 6;
 int digitalRelay6 = 7;
+int digitalLedErr = 8;//We might not need this
 int digitalImd1 = 9;
 int digitalImd2 = 10;
 int digitalBrake = 29;
@@ -99,9 +100,9 @@ void loop() {
         if(timeoutRx3 < millis()) {
             Serial.println("ar1 lost connection to ar3");
         }
-        digitalWrite(digitalErr, HIGH);
+        digitalWrite(digitalLedErr, HIGH);
     } else {
-        digitalWrite(digitalErr, LOW);
+        digitalWrite(digitalLedErr, LOW);
     }
 }
 
