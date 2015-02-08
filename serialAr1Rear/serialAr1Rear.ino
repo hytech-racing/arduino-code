@@ -48,61 +48,88 @@ unsigned long timeoutRx2;//Use Serial2 for Arduino 2 - Dash
 unsigned long timeoutRx3;//Use Serial3 for Arduino 3 - Battery
 unsigned long runLoop;//Stores millisecond value to run main loop every so often (instead of using delay)
 
-
 void setup() {
-  Serial.begin(115200);//Talk back to computer
-  Serial2.begin(115200);
-  Serial3.begin(115200);
-  inputCmd2.reserve(50);
-  inputCmd3.reserve(50);
-  //Initialize output pins
-  pinMode(digitalRelay1, OUTPUT);
-  pinMode(digitalRelay2, OUTPUT);
-  pinMode(digitalRelay3, OUTPUT);
-  pinMode(digitalRelay4, OUTPUT);
-  pinMode(digitalRelay5, OUTPUT);
-  pinMode(digitalRelay6, OUTPUT);
-  pinMode(digitalImd1, OUTPUT);
-  pinMode(digitalImd2, OUTPUT);
-  pinMode(digitalLedErr, OUTPUT);
-  pinMode(digitalBrake, OUTPUT);
-  pinMode(digitalReady2DriveSound, OUTPUT);
-  //Initialize input pins
-  pinMode(analogImdFaultReset, INPUT);
-  pinMode(analogBmsFaultReset, INPUT);
-  pinMode(analogMotorCtrlTemp, INPUT);
-  pinMode(analogWaterTemp, INPUT);
-  pinMode(analogPumpStatus, INPUT);
-  pinMode(analogCheckInertia, INPUT);
-  pinMode(analogCheckCockpit, INPUT);
-  pinMode(analogCheckBots, INPUT);
-  pinMode(analogCheckTsms, INPUT);
-  pinMode(analogCheckDcDc, INPUT);
-  pinMode(analogBms1, INPUT);
-  pinMode(analogBms2, INPUT);
-  pinMode(analogBms3, INPUT);
-  pinMode(analogBms4, INPUT);
-  pinMode(analogBms5, INPUT);
+    Serial.begin(115200);//Talk back to computer
+    Serial2.begin(115200);
+    Serial3.begin(115200);
+    inputCmd2.reserve(50);
+    inputCmd3.reserve(50);
+    //Initialize output pins
+    pinMode(digitalRelay1, OUTPUT);
+    pinMode(digitalRelay2, OUTPUT);
+    pinMode(digitalRelay3, OUTPUT);
+    pinMode(digitalRelay4, OUTPUT);
+    pinMode(digitalRelay5, OUTPUT);
+    pinMode(digitalRelay6, OUTPUT);
+    pinMode(digitalImd1, OUTPUT);
+    pinMode(digitalImd2, OUTPUT);
+    pinMode(digitalLedErr, OUTPUT);
+    pinMode(digitalBrake, OUTPUT);
+    pinMode(digitalReady2DriveSound, OUTPUT);
+    //Initialize input pins
+    pinMode(analogImdFaultReset, INPUT);
+    pinMode(analogBmsFaultReset, INPUT);
+    pinMode(analogMotorCtrlTemp, INPUT);
+    pinMode(analogWaterTemp, INPUT);
+    pinMode(analogPumpStatus, INPUT);
+    pinMode(analogCheckInertia, INPUT);
+    pinMode(analogCheckCockpit, INPUT);
+    pinMode(analogCheckBots, INPUT);
+    pinMode(analogCheckTsms, INPUT);
+    pinMode(analogCheckDcDc, INPUT);
+    pinMode(analogBms1, INPUT);
+    pinMode(analogBms2, INPUT);
+    pinMode(analogBms3, INPUT);
+    pinMode(analogBms4, INPUT);
+    pinMode(analogBms5, INPUT);
 
-  //Wait 1 second for communication before throwing error
-  timeoutRx2 = 1000;
-  timeoutRx3 = 1000;
-  runLoop = 0;
+    //Init these here because only needed in scope of setup()
+    unsigned long startupLoop;//Stores ms value to run startup loop every so often
+    unsigned long ready2DriveSound;//Stores ms value to stop ready to drive sound
 
-  bool ready2Run;
-  //Check if EEPROM error code was set
-  char eepromErrCode = EEPROM.read(0);
+    //Wait 1 second for communication before throwing error
+    timeoutRx2 = 1000;
+    timeoutRx3 = 1000;
+    runLoop = 0;
+    startupLoop = 0;
 
-  if (eepromErrCode == 0xFF){
-      ready2Run = true;
-  }
-  while (!ready2Run) {
-      //todo if eepromerrcode == 1 (BMS)
-      //todo if eepromerrcode == 2 (IMD)
-      //todo analog read fault reset switches
-      Serial.println("Shutoff error code (must reset): " + eepromErrCode);//Send to computer
-      Serial1.println("ar3:waitErr");//So ar1 and ar3 are receiving something on serial
-  }
+    bool ready2Startup;
+    //Check if EEPROM error code was set
+    byte eepromErrCode = EEPROM.read(0);
+
+    if (eepromErrCode == 255){//todo make sure this is correct blank code
+        ready2Startup = true;
+    }
+    while (!ready2Startup) {
+        //todo if eepromerrcode == 1 (BMS) and button pressed
+        if (eepromErrCode == 1 && true) {
+            EEPROM.write(0,255);
+            ready2Startup = true;
+        }
+        //todo if eepromerrcode == 2 (IMD) and button pressed (5 volts reading when closed)
+        if (eepromErrCode == 2 && true) {
+            EEPROM.write(0,255);
+            ready2Startup = true;
+        }
+        if (startupLoop < millis()) {
+            startupLoop = millis() + 500;//Run every .5 seconds
+            Serial.println("Shutoff error code (must reset): " + eepromErrCode);//Send to computer
+            Serial1.println("ar3:waitErr");//So ar1 and ar3 are receiving something on serial
+        }
+    }
+    //todo anything else before ready to drive
+    //Ready to drive
+    digitalWrite(digitalReadyToDriveSound, HIGH);
+    ready2DriveSound = millis() + 2000;//Stop after 2 seconds
+    startupLoop = millis();
+    while (ready2DriveSound > millis()) {//Keep drive sound on for 2 seconds but cont. sending serial comm.
+        if (startupLoop < millis()) {
+            startupLoop = millis() + 500;//Run every .5 seconds
+            Serial.println("Playing ready 2 drive sound");
+            Serial1.println("ar3:waitR2D");//So ar1 and ar3 are receiving something on serial
+        }
+    }
+    digitalWrite(digitalReadyToDriveSound, LOW);
 }
 
 
@@ -133,6 +160,14 @@ void loop() {
     }
     if (runLoop < millis()) {//Runs 10x per second
         runLoop = millis() + 100;//Push runLoop up 100 ms
+
+        //todo read motor/controller/water temp - pins A2-A3
+        //todo make sure water pump is on - pin A5?
+        //todo write error code if emergency buttons pressed? - pins A6-A10
+        //todo SOMETHING with bms????? - pins A11-A14
+        //todo read BMS charge "charge/discharge enable" ground conn - pin A15
+
+
         //todo Anything this Arduino needs to do other than process received data
     }
     if (timeoutRx2 < millis() || timeoutRx3 < millis()) {//If 1 second has passed since receiving a complete command from both Arduinos turn off low voltage ***SOMETHING HAS GONE WRONG***
@@ -171,7 +206,7 @@ void serialEvent3() {//Receive bytes from AR3
       stringComplete3 = true;
       timeoutRx3 = millis() + 1000; //Number of milliseconds since program started, plus 1000, used to timeout if no complete command received for 1 second
       Serial.println("recvd ar3: "+inputCmd3);
-    }else {
+    } else {
       inputCmd3 += newChar;
     }
   }
