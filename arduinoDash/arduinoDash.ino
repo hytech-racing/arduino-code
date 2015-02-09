@@ -154,13 +154,14 @@ void Serial1Event() {
 
 void sendHardShutdown(int errCode) {
     /*
-    Error codes:
-    3. Lost communication
-    4. Acceleration implausibility
-    5. Too much power (>=5kW)
+    Resetable error codes:
+    10. Lost communication
+    11. Acceleration implausibility
+    12. Too much power (>=5kW)
+    Only for our purposes, these shutoffs ARE driver resetable
     */
     String shutdownError = "ar1:kill";
-    EEPROM.write(0,(char)errCode);//Only for our purposes, these shutoffs ARE driver resetable
-    Serial1.println(shutdownError + errCode);//Send to arduino first
-    Serial.println(shutdownError + errCode);//Now send to computer
+    EEPROM.write(1,(char)errCode);//Write resetable codes to addr 1
+    Serial1.println(shutdownError);//Send to ar1 first
+    Serial.println(shutdownError + ":" + errCode);//Now send to computer
 }
