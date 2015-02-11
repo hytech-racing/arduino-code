@@ -61,6 +61,7 @@ float torqueVal = 0;//0-1024 mapped value for torque
 boolean regenActive = false;
 
 boolean brakePlausActive = false;//Set to true if brakes actuated && torque encoder > 25%
+boolean ready2Drive = false;//Set to false on startup and soft restart
 
 void setup() {
     Serial.begin(115200);//Talk back to computer
@@ -70,23 +71,34 @@ void setup() {
     //Wait 1 second for communication before throwing error
     timeoutRx = 1000;
     runLoop = 0;
-    bool ready2Run = false;
-
-    while (!ready2Run) {
-
-    }
 }
 
 void loop() {
+    if (!ready2Drive) {
+        unsigned long startupLoop = 0;//Stores ms value to run startup loop every so often
+        int eepromErrCode = EEPROM.read(1);
+        if (eepromErrCode < 255) {
+            //Something is written in EEPROM
+            unsigned long printErr = millis() + 3000;
+            while (printErr > millis()) {
+                if (startupLoop < millis()) {
+                    Serial.println("Shutoff error code: " + eepromErrCode);
+                }
+            }
+        }
+    }
     if (stringComplete) {//Recieved something on Serial1
         if(inputCmd.substring(0,13) == "ar2:bmsPower:"){
             inputCmd.substring(13,inputCmd.length()-1).toCharArray(floatBuffer,sizeof(floatBuffer));
             bmsPowerValue = atof(floatBuffer);
+        }else if(inputCmd == "ar2:restart"){
+            //Restarting vehicle
+            ready2Drive = false;
         }
         inputCmd = "";
         stringComplete = false;
     }
-    if(runLoop < millis()){//Runs up to 10x per second
+    if(runLoop < millis() && ready2Drive){//Runs up to 10x per second
         runLoop = millis() + 100;//Push runLoop up 100 ms
         pot1ValAdjusted = (1000/pot1Range)*(analogRead(pot1)-pot1Low);//Make adjusted mapped values (now 0-1000)
         pot2ValAdjusted = (1000/pot2Range)*(analogRead(pot2)-pot2Low);
@@ -135,8 +147,8 @@ void loop() {
     if (timeoutRx < millis()) {//If 1 second has passed since receiving a complete command send shutdown command
         Serial.println(millis());
         Serial.println("ar2 lost connection to ar1");
-        sendHardShutdown(1);//1 means lost communication
-        //todo this might make no sense because it is sending a shutdown signal when communication is messed up
+        sendHardShutdown(10);//10 means lost communication
+        //todo this might make no sense because it is sending a shutdown signal over serial when communication is messed up
     }
 }
 

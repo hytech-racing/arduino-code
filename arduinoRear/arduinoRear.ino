@@ -48,9 +48,6 @@ unsigned long timeoutRx2;//Use Serial2 for Arduino 2 - Dash
 unsigned long timeoutRx3;//Use Serial3 for Arduino 3 - Battery
 unsigned long runLoop;//Stores millisecond value to run main loop every so often (instead of using delay)
 bool eepromCheckGood = false;//Used when checking if eeprom error code is set
-unsigned long startupLoop;//Stores ms value to run startup loop every so often
-unsigned long ready2DriveSound;//Stores ms value to stop ready to drive sound
-
 
 void setup() {
     Serial.begin(115200);//Talk back to computer
@@ -94,45 +91,58 @@ void setup() {
 }
 
 void loop() {
-    if (!eepromCheckGood) {
-        startupLoop = 0;
+    if (!eepromCheckGood) {//Runs on startup and after high voltage shutdowns
+        unsigned long startupLoop = 0;//Stores ms value to run startup loop every so often
         //Check if EEPROM error code was set
-        byte eepromErrCode = EEPROM.read(0);
+        int eepromErrCode = EEPROM.read(0);
 
         if (eepromErrCode == 255){//todo make sure this is correct blank code
             eepromCheckGood = true;
         }
         while (!eepromCheckGood) {//While there is an un reset eeprom error
-            //todo if eepromerrcode == 1 (BMS) and button pressed
             //todo query BMS and do not start up if there's still an error
-            if (eepromErrCode == 1 && true) {
+            if (eepromErrCode == 1 && analogRead(analogImdFaultReset) > 1000) {//If eepromerrcode == 1 (BMS) and button pressed (5 volts reading when closed)
                 EEPROM.write(0,255);
                 eepromCheckGood = true;
             }
-            //todo if eepromerrcode == 2 (IMD) and button pressed (5 volts reading when closed)
-            if (eepromErrCode == 2 && true) {
+            if (eepromErrCode == 2 && analogRead(analogBmsFaultReset) > 1000) {//If eepromerrcode == 2 (IMD) and button pressed (5 volts reading when closed)
                 EEPROM.write(0,255);
                 eepromCheckGood = true;
             }
             if (startupLoop < millis()) {
                 startupLoop = millis() + 500;//Run every .5 seconds
                 Serial.println("Shutoff error code (must reset): " + eepromErrCode);//Send to computer
-                Serial1.println("ar3:waitErr");//So ar1 and ar3 are receiving something on serial
+                Serial2.println("ar2:waitErr");
+                Serial3.println("ar3:waitErr");
             }
         }
         //todo wait for initialize switch to activate relays 1-3
-        //todo then activate relay 4 (precharge) for at least 3 seconds
+        //Activate relay 4 (precharge) for at least 3 seconds
+        digitalWrite(digitalRelay4, HIGH);
+        unsigned long precharge = millis() + 3000;//Keep precharge on for 3 seconds
+        while (precharge > millis()) {
+            if (startupLoop < millis()) {
+                startupLoop = millis() + 500;//Run every .5 seconds
+                Serial.println("Precharge relay activated");
+                Serial2.println("ar2:waitPrecharge");
+                Serial3.println("ar3:waitPrecharge");
+            }
+        }
         //todo then wait for activation switch (maybe)
-        //todo then activate relay 5 (AIR 4) and relay 6 and disable precharge immediately
+        //Activate relay 5 (AIR 4) and relay 6 and disable precharge immediately
+        digitalWrite(digitalRelay5, HIGH);
+        digitalWrite(digitalRelay6, HIGH);
+        digitalWrite(digitalRelay4, LOW);
         //Ready to drive sound
         digitalWrite(digitalReadyToDriveSound, HIGH);
-        ready2DriveSound = millis() + 2000;//Stop after 2 seconds
+        unsigned long ready2DriveSound = millis() + 2000;//Stores ms value to stop ready to drive sound after 2 seconds
         startupLoop = millis();
         while (ready2DriveSound > millis()) {//Keep drive sound on for 2 seconds but cont. sending serial comm.
             if (startupLoop < millis()) {
                 startupLoop = millis() + 500;//Run every .5 seconds
                 Serial.println("Playing ready 2 drive sound");
-                Serial1.println("ar3:waitR2D");//So ar1 and ar3 are receiving something on serial
+                Serial2.println("ar2:waitR2D");
+                Serial3.println("ar3:waitR2D");
             }
         }
         digitalWrite(digitalReadyToDriveSound, LOW);
@@ -180,8 +190,6 @@ void loop() {
       }
     }
     if (timeoutRx2 < millis() || timeoutRx3 < millis()) {//If 1 second has passed since receiving a complete command from both Arduinos turn off low voltage ***SOMETHING HAS GONE WRONG***
-        //todo Code to shutdown
-        //For now, activate LED and print error
         Serial.println(millis());
         if(timeoutRx2 < millis()) {
             Serial.println("ar1 lost connection to ar2");
@@ -234,30 +242,27 @@ void shutdownHard(int errCode) {
     //ALL shutdowns
     digitalWrite(digitalRelay1, LOW);
     digitalWrite(digitalRelay2, LOW);
-    digitalWrite(digitalRelay3, LOW);//todo which relays do I turn off?
+    digitalWrite(digitalRelay3, LOW);
+    digitalWrite(digitalRelay4, LOW);//todo which relays do I turn off?
     //BMS shutdown (a work in progress)
     if (errCode == 1) {
-        EEPROM.write(0,(char)1);
+        EEPROM.write(0,1);
         eepromCheckGood = false;
     }
     if (errCode == 2) {
-        EEPROM.write(0,(char)2);
+        EEPROM.write(0,2);
         eepromCheckGood = false;
     }
     if (errCode == 3) {
         if (true) {
             //todo if init switch in neutral position then throw no error
         } else {
-            EEPROM.write(0,(char)3);
+            EEPROM.write(0,3);
         }
     }
-
-    if(errCode < 10) {//Write error codes to addr 0
-        EEPROM.write(0,(char)errCode);
-    } else {//Write resetable codes to addr 1
-        EEPROM.write(1,(char)errCode);
-    }
     Serial.println(errCode);//Now send to computer
+    Serial2.println("ar2:restart");
+    Serial3.println("ar3:restart");
     eepromCheckGood = false;
 }
 
@@ -280,3 +285,8 @@ See from voltage divider that cockpit ESB is pressed
 Cut all relays
 if initialize switch is in neutral position then no error
 */
+
+void queryBmsError() {//Returns true if error
+  //todo talk to BMS
+  return true;
+}
