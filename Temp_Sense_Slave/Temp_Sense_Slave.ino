@@ -1,7 +1,7 @@
 
 // This code is sparse in comments; check the document "Code_Explanations" or of a similar name for an explanation.
 //----------------------------------------------------------------Part 1
-int sensorReadings[13] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
+int sensorReadings[9] = {0, 0, 0, 0, 0, 0, 0, 0};
 int variablePlaceWriteTo = 0;
 int readFailure = 0;
 int i = 0;
@@ -17,16 +17,16 @@ void setup() {
 //----------------------------------------------------------------Part 2
 void loop() {
   resetVars(); // defined below
-  for (i = 72; i < 78; i++) {
+  for (i = 72; i < 76; i++) {
     Wire.flush();
-    Wire.requestFrom(i, 2); // check how many bytes ro recieve
+    Wire.requestFrom(i, 2); // check how many bytes to recieve
     while(Wire.available()) {
       sensorReadings[variablePlaceWriteTo] = Wire.read();
       variablePlaceWriteTo++;
     }
   }
   //--------------------------------------------------------------Part 3
-  if (variablePlaceWriteTo != 12) {
+  if (variablePlaceWriteTo != 8) {
     readFailure++;
     commFailure = true;
   }
@@ -35,13 +35,12 @@ void loop() {
   }
   // -------------------------------------------------------------Part 4
   if (!commFailure) {
-    for (i = 0; i < 11; i = i+2) {
+    for (i = 0; i < 7; i = i+2) {
       sensorReadings[i] = sensorReadings[i]*4;
-      if (sensorReadings[i+1] >= 128) {
-        sensorReadings[i] = sensorReadings[i]+2;
-        sensorReadings[i+1] = sensorReadings[i+1] - 128;  // extracts final two bits
+      if ((sensorReadings[i+1] & 128) == 128) { // bitwise AND
+        sensorReadings[i] = sensorReadings[i]+2;  // extracts final two bits
       }
-      if (sensorReadings[i+1] >= 64) {
+      if ((sensorReadings[i+1] & 64) == 64) {
         sensorReadings[i] = sensorReadings[i]+1;
       }
     }
@@ -49,8 +48,6 @@ void loop() {
     highestTemp = max(sensorReadings[0], sensorReadings[2]);
     highestTemp = max(highestTemp, sensorReadings[4]);
     highestTemp = max(highestTemp, sensorReadings[6]);
-    highestTemp = max(highestTemp, sensorReadings[8]);
-    highestTemp = max(highestTemp, sensorReadings[10]);
     Serial.write(highestTemp);
     delay(200);                               // check for best delay time
   }
@@ -64,7 +61,7 @@ void loop() {
 void resetVars() {     // reset variables function
   commFailure = false;
   variablePlaceWriteTo = 0;
-  for (i = 0; i < 12; i++) {
+  for (i = 0; i < 7; i++) {
     sensorReadings[i] = 0;
   }
 }
