@@ -7,6 +7,7 @@
 //---------------------------------------------------------------------------------Part 1
 #include <LiquidCrystal.h>
 #include <Wire.h>
+unsigned long loopCounter = 0;
 const int pumpLight = 13;
 const int IMDlight = 12;
 const int BMSlight = 11;
@@ -45,6 +46,9 @@ void loop() {
   while(!carStartedYet) {
     // write to lcd that the car has not started yet
   }
+  if (millis() > loopCounter) {
+  loopCounter = millis() + 100;  
+  
   pedal1Val = analogRead(accPotPin);
   pedal2Val = analogRead(secondAccPotPin);
   accPedalDifference = abs(pedal1Val - pedal2Val);
@@ -131,7 +135,7 @@ void loop() {
   
   
   
-  
+}  
 } // ------------------------------------------------------------END OF LOOP
 
 void giveDataToCenter() {
