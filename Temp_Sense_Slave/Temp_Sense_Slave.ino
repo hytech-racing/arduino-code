@@ -7,6 +7,7 @@ int readFailure = 0;
 int i = 0;
 int highestTemp = 0;
 boolean commFailure = false;
+unsigned long loopCounter = 0;
 #include <Wire.h>
 
 void setup() {
@@ -16,6 +17,9 @@ void setup() {
 }
 //----------------------------------------------------------------Part 2
 void loop() {
+  if (millis() > loopCounter) {
+  loopCounter = millis() + 100; // 10 times/second  
+  
   resetVars(); // defined below
   for (i = 72; i < 76; i++) {
     Wire.flush();
@@ -49,12 +53,13 @@ void loop() {
     highestTemp = max(highestTemp, sensorReadings[4]);
     highestTemp = max(highestTemp, sensorReadings[6]);
     Serial.write(highestTemp);
-    delay(200);                               // check for best delay time
+                                  // check for best delay time
   }
   else if (readFailure > 5) {  // if reading the sensors has failed 5 times in a row
     Serial.write(255);
-    delay(200);
+    
   }
+}
 }
 //----------------------------------------------------------------End Of Loop     
 
