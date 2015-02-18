@@ -99,15 +99,23 @@ void loop() {
         if (eepromErrCode == 255){//todo make sure this is correct blank code
             eepromCheckGood = true;
         }
+        if (eepromErrCode == 1) {
+            Serial2.println("ar2:amsBmsFaultLed:1");//Make dash Arduino turn on error light
+        }
+        if (eepromErrCode == 2) {
+            Serial2.println("ar2:imdFaultLed:1");//Make dash Arduino turn on error light
+        }
         while (!eepromCheckGood) {//While there is an un reset eeprom error
             //todo query BMS and do not start up if there's still an error
-            if (eepromErrCode == 1 && analogRead(analogImdFaultReset) > 1000) {//If eepromerrcode == 1 (BMS) and button pressed (5 volts reading when closed)
-                EEPROM.write(0,255);
-                eepromCheckGood = true;
+            if (eepromErrCode == 1 && analogRead(analogBmsFaultReset) > 1000) {//If eepromerrcode == 1 (BMS) and button pressed (5 volts reading when closed)
+                EEPROM.write(0,255);//Delete error from EEPROM
+                eepromCheckGood = true;//Exit this loop
+                Serial2.println("ar2:amsBmsFaultLed:0");//Make dash Arduino turn off error light
             }
-            if (eepromErrCode == 2 && analogRead(analogBmsFaultReset) > 1000) {//If eepromerrcode == 2 (IMD) and button pressed (5 volts reading when closed)
-                EEPROM.write(0,255);
-                eepromCheckGood = true;
+            if (eepromErrCode == 2 && analogRead(analogImdFaultReset) > 1000) {//If eepromerrcode == 2 (IMD) and button pressed (5 volts reading when closed)
+                EEPROM.write(0,255);//Delete error from EEPROM
+                eepromCheckGood = true;//Exit this loop
+                Serial2.println("ar2:imdFaultLed:0");//Make dash Arduino turn off error light
             }
             if (startupLoop < millis()) {
                 startupLoop = millis() + 500;//Run every .5 seconds
@@ -134,7 +142,7 @@ void loop() {
         digitalWrite(digitalRelay6, HIGH);
         digitalWrite(digitalRelay4, LOW);
         //Ready to drive sound
-        digitalWrite(digitalReadyToDriveSound, HIGH);
+        digitalWrite(digitalReady2DriveSound, HIGH);
         unsigned long ready2DriveSound = millis() + 2000;//Stores ms value to stop ready to drive sound after 2 seconds
         startupLoop = millis();
         while (ready2DriveSound > millis()) {//Keep drive sound on for 2 seconds but cont. sending serial comm.
@@ -145,22 +153,25 @@ void loop() {
                 Serial3.println("ar3:waitR2D");
             }
         }
-        digitalWrite(digitalReadyToDriveSound, LOW);
+        digitalWrite(digitalReady2DriveSound, LOW);
+        Serial2.println("ar2:ready2Drive");
+        Serial3.println("ar3:ready2Drive");
     }
     else {//No eeprom errors
       if (stringComplete2) {//Received command from AR2
           if (inputCmd2.substring(0,3) == "ar3") {//Is this command meant for Arduino 3?
               Serial3.println(inputCmd2);
               Serial.println("Relayed from ar2 to ar3: "+inputCmd2);
+          }else if (inputCmd2 == "ar1:restart") {
+              shutdownHard(0);
+          }else if (inputCmd2.substring(0,10) == "ar1:brake:") {//Is this a command to AR1 LED BRAKE?
+              String subCmd = inputCmd2.substring(10);
+              if (subCmd == "1") {//1 for on
+                  digitalWrite(digitalBrake, HIGH);
+              }else if (subCmd == "0") {//0 for off
+                  digitalWrite(digitalBrake, LOW);
+              }
           }
-      else if (inputCmd2.substring(0,10) == "ar1:brake:") {//Is this a command to AR1 LED BRAKE?
-          String subCmd = inputCmd2.substring(10);
-          if (subCmd == "1") {//1 for on
-              digitalWrite(digitalBrake, HIGH);
-          }else if (subCmd == "0") {//0 for off
-              digitalWrite(digitalBrake, LOW);
-          }
-      }
       inputCmd2 = "";
       stringComplete2 = false;
       }
@@ -286,7 +297,7 @@ Cut all relays
 if initialize switch is in neutral position then no error
 */
 
-void queryBmsError() {//Returns true if error
+boolean queryBmsError() {//Returns true if error
   //todo talk to BMS
   return true;
 }
