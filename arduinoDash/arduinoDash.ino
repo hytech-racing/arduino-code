@@ -8,11 +8,14 @@ Use: Read and process pedal values, show values on LCD
 BEGIN CONFIGURATION
 *************************************/
 #include <EEPROM.h>;
+#include <Adafruit_GFX.h>    // Core graphics library
+#include <Adafruit_TFTLCD.h> // Hardware-specific library
 
 int ledPinWaterPumpAlert = 11;
 int ledPinImdFault = 12;
 int ledPinAmsBmsFault = 13;
 int analogCycleDisplay = 8;
+int pwmBmsTorque = 7;//todo Not yet in wiring diagram
 
 //Extended pot is low resistance
 //todo set these pins to which pins are being used
@@ -28,15 +31,12 @@ every time the loop runs
 Extended = more resistance, Pedal compresses pot when pressed, therefore higher voltage reading corresponds to higher torque
 */
 //Pot1 and Pot2 used for acceleration
-int pot1High = 0;//Pedal pressed
-int pot1Low = 0;//Pedal resting
-int pot2High = 0;
-int pot2Low = 0;
-int pot3High = 0;//Pot3 used for brake
-int pot3Low = 0;
-int pot3Hard = 0;//Value when hard braking
-
-String accValPrefix = "ar1:acc:";
+int pot1High = 650;//Pedal pressed
+int pot1Low = 275;//Pedal resting//todo right now the low vals are when a little pressure is applied
+int pot2High = 650;
+int pot2Low = 275;
+int pot3High = 689;//Pot3 used for brake
+int pot3Low = 210;
 
 /*************************************
 END CONFIGURATION
@@ -50,16 +50,18 @@ unsigned long runLoop;//Stores millisecond value to run main loop every so often
 float bmsPowerValue = 0;//Receives to use with brake plausibility check
 
 char floatBuffer[32];//used to convert string to float
-int pot1ValAdjusted = 0;
-int pot2ValAdjusted = 0;
-int pot3ValAdjusted = 0;
-int potAccVal = 0;
-int potAccAdjDiff = 0;//Holds the difference between two accelerator readings
-int pot1Range = pot1High - pot1Low;//Ranges that each pot will move (used for percentage calcs)
-int pot2Range = pot2High - pot2Low;
-int pot3Range = pot3High - pot3Low;
+float pot1ValAdjusted;
+float pot2ValAdjusted;
+float pot3ValAdjusted;
+float potAccAdjDiff;//Holds the difference between two accelerator readings
+float pot1Range = pot1High - pot1Low;//Ranges that each pot will move (used for percentage calcs)
+float pot2Range = pot2High - pot2Low;
+float pot3Range = pot3High - pot3Low;
 
-float torqueVal = 0;//0-1024 mapped value for torque
+int cycleDisplay = 1;//Stores which view to send to LCD
+
+float torqueVal;//0-1000 mapped value for torque
+float torqueValAdjusted;//Adjusted exponentially
 
 boolean regenActive = false;
 
@@ -92,6 +94,11 @@ void loop() {
         }
         EEPROM.write(1,255);
         runStartupErrCheck = false;
+        //todo reset stuff like error LEDs (also make sure ar1 sends errors after this loop runs)
+        //todo this part might need to happen on a soft restart below
+        digitalWrite(ledPinWaterPumpAlert, LOW);
+        digitalWrite(ledPinImdFault, LOW);
+        digitalWrite(ledPinAmsBmsFault, LOW);
     }
     if (stringComplete) {//Recieved something on Serial1
         if (inputCmd.substring(0,13) == "ar2:bmsPower:") {
@@ -130,43 +137,91 @@ void loop() {
             }
         }
         if (analogRead(analogCycleDisplay) > 1000) {//If cycle display button is pressed
-            //todo Output various stuff to lcd
+            if (cycleDisplay == 1) {
+                cycleDisplay = 2;
+            } else if (cycleDisplay == 2) {
+                cycleDisplay = 1;
+            }
         }
-        pot1ValAdjusted = (1000/pot1Range)*(analogRead(pot1)-pot1Low);//Make adjusted mapped values (now 0-1000)
-        pot2ValAdjusted = (1000/pot2Range)*(analogRead(pot2)-pot2Low);
-        pot3ValAdjusted = (1000/pot3Range)*(analogRead(pot3)-pot3Low);
 
-        if(pot3ValAdjusted < pot3High) { //Brake light
+        pot1ValAdjusted = analogRead(pot1)-pot1Low;
+        pot1ValAdjusted = pot1ValAdjusted * 1000;
+        pot1ValAdjusted = pot1ValAdjusted / pot1Range;//new mapped value from 0-1000
+
+        pot2ValAdjusted = analogRead(pot2)-pot2Low;
+        pot2ValAdjusted = pot2ValAdjusted * 1000;
+        pot2ValAdjusted = pot2ValAdjusted / pot2Range;
+
+        pot3ValAdjusted = analogRead(pot3)-pot3Low;
+        pot3ValAdjusted = pot3ValAdjusted * 1000;
+        pot3ValAdjusted = pot3ValAdjusted / pot3Range;
+
+        potAccAdjDiff = abs(pot1ValAdjusted-pot2ValAdjusted);//Get difference between torque sensors
+        if (pot2ValAdjusted > pot1ValAdjusted) {//Torque is lowest of two torque sensors
+            torqueVal = pot1ValAdjusted;
+        } else {
+            torqueVal = pot2ValAdjusted;
+        }
+        if (torqueVal < 0) {
+            torqueValAdjusted = 0;
+        } else {
+            torqueValAdjusted = 255 * pow((torqueVal/1000), 2);
+        }
+        if (torqueValAdjusted > 255) {
+            torqueValAdjusted = 255;
+        }
+
+        if (pot3ValAdjusted > 0) { //Brake light
             Serial1.println("ar1:brake:1");
-        }else {
+        } else {
             Serial1.println("ar1:brake:0");
         }
+
+
+        //Update LCD todo this needs to be fleshed out
+        if (cycleDisplay == 1) {//Default view
+            void setCursor(uint16_t 10, uint16_t 10);
+            void setTextColor(uint16_t 0x0000, uint16_t 0xFFFF);
+            void setTextSize(uint8_t 3);
+            print(torqueVal);
+
+        } else if (cycleDisplay == 2) {
+            //Alternate display
+        }
+
     }
     if (runLoop < millis() && ready2Drive){//Runs only if car is ready to drive
         runLoop = millis() + 100;//Push runLoop up 100 ms
 
-        potAccAdjDiff = abs(pot2ValAdjusted-pot1ValAdjusted);//Get difference between torque sensors
-        if(potAccAdjDiff > 100){//Acceleration error check (Die if 10%+ difference between readings)
-            sendHardShutdown(2);//2 means acceleration implausibility
-        }else {
-            torqueVal = (int)((pot1ValAdjusted + pot2ValAdjusted)/2);
+
+        if (potAccDiff > 200){//Acceleration error check (Die if 20%+ difference between readings)
+            //todo error checking which can detect open circuit, short to ground and short to sensor power
+            //todo does this need to shut down car or just send 0 torque val?
+            Serial.println("acceleration implausibility detected");
+            analogWrite(pwmBmsTorque, 0);
+        } else {
             if(pot3ValAdjusted > 0 && torqueVal >= 250) {//If brake pressed and torque pressed over 25%
                 brakePlausActive = true;
-            }else {
-                if(brakePlausActive && torqueVal < 50) {//Motor deactivated but torque less than 5% (required before disabling brake plausibility)
+                analogWrite(pwmBmsTorque, 0);
+                Serial.println("brake plausibility activated");
+            } else {
+                if (brakePlausActive && torqueVal < 50) {//Motor deactivated but torque less than 5% (required before disabling brake plausibility)
                     brakePlausActive = false;
+                    Serial.println("brake plausibility deactivated");
                 }
-                if(!brakePlausActive) {//If brake plausibility is not active
-                    //todo send torqueVal to motor controller
-                }else {//If brake plausibility is active
-                    //todo send 0 to motor controller
+                if (!brakePlausActive) {//If brake plausibility is not active
+                    analogWrite(pwmBmsTorque, torqueValAdjusted);
+                    Serial.println("sending torque value to motor controller");
+                } else {//If brake plausibility is active
+                    analogWrite(pwmBmsTorque, 0);
                 }
             }
         }
-        if(bmsPowerValue >= 5){//If brake is pressed hard and BMS says 5kW of power (BMS arduino needs to send that value to this arduino)
+        if (bmsPowerValue >= 5){//If brake is pressed hard and BMS says 5kW of power (BMS arduino needs to send that value to this arduino)
             sendHardShutdown(3);//3 means too much power
             //todo might not be receiving value in kW units
         }
+        /*
         if(false && regenActive == false){//Regeneration //todo what activates this?
             regenActive = true;
             Serial1.println("ar1:regen:1");
@@ -176,6 +231,7 @@ void loop() {
             Serial1.println("ar1:regen:0");
             //todo send to motor controller, not rear arduino
         }
+        */
 
     }
     if (timeoutRx < millis()) {//If 1 second has passed since receiving a complete command send shutdown command
