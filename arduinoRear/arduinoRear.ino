@@ -15,8 +15,8 @@ int digitalRelay3 = 4;
 int digitalRelay4 = 5;
 int digitalRelay5 = 6;
 int digitalRelay6 = 7;
-int digitalImd1 = 9;
-int digitalImd2 = 10;
+int digitalImd1 = 9; // HSOK pin
+int digitalImd2 = 10; // PWM read pin
 int digitalLedErr = 13;//We might not need this
 int digitalBrake = 29;
 int digitalReady2DriveSound = 31;
@@ -198,7 +198,17 @@ void loop() {
             //todo BMS shutdown
             shutdownHard(2);
             //todo imd shutdown
-            shutdownHard(1);
+            if (digitalRead(digitalImd1) == HIGH){
+                highPulse = pulseIn(7, HIGH, 1500000);
+                lowPulse = pulseIn(7, LOW, 1500000);
+                totalPulse = highPulse + lowPulse;
+                if (totalPulse > 200000) {
+                   shutdownHard(1); // BMS detects a fault
+                }
+                else {
+                    shutdownHard(4); // BMS gets disconnected from high voltage system
+                }
+            }
 
             //todo Anything this Arduino needs to do other than process received data
         }
@@ -244,10 +254,11 @@ void serialEvent3() {//Receive bytes from AR3
 void shutdownHard(int errCode) {
     /*
     Error codes:
-    1. BMS
-    2. IMD
+    1. BMS loss of 
+    2. IMD loss of insulation
     3. Cockpit ESB
-
+    4. IMD disconnect from tractive system 
+    
     Resetable error codes:
     10. Lost communication
     11. Acceleration implausibility
