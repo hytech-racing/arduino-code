@@ -30,9 +30,14 @@ int analogCheckCockpit = 7;
 int analogCheckBots = 8;
 int analogCheckTsms = 9;
 int analogCheckDcDc = 10;
-int analogBms1 = 11;
-int analogBms2 = 12;
-int analogBms3 = 13;
+int Bms_SOC = 11;
+    int Bms_SOC_Val = 0;
+int Bms_Amps = 12;
+    int Bms_Amps_Val = 0;
+    Bms_Amps_Actual = 0;
+    Bms_Allowed_Current = 0;
+int Bms_DCL = 13;
+    int Bms_DCL_Val = 0;
 int analogBms4 = 14;
 int analogBms5 = 15;
 
@@ -197,7 +202,7 @@ void loop() {
 
             //todo BMS shutdown
             shutdownHard(2);
-            //todo imd shutdown
+            ////////////////////////////////////////////////////////////////////// READ IMD
             if (digitalRead(digitalImd1) == HIGH){
                 highPulse = pulseIn(7, HIGH, 1500000);
                 lowPulse = pulseIn(7, LOW, 1500000);
@@ -208,6 +213,18 @@ void loop() {
                 else {
                     shutdownHard(4); // BMS gets disconnected from high voltage system
                 }
+            }
+            ///////////////////////////////////////////////////////////////////// READ BMS
+            Bms_SOC_Val = analogRead(Bms_SOC);
+            Bms_Amps_Val = analogRead(Bms_Amps);
+            Bms_DCL_Val = analogRead(Bms_DCL);
+            Bms_Amps_Actual = (map(AmpsOutReading, 0, 1024, 0, 1250)-(1250/2)); // NEED TO USE CHANNEL 2 OF CURRENT SENSOR
+            Bms_Allowed_Current = map(Bms_DCL_Val, 0, 1024, 0, 200) // CHANGE 200 TO OUR MAX ALLOWED CURRENT
+            if (Bms_SOC_Val < 102) { // less than 10% of battery left
+                shutdownHard(5);
+            }
+            else if (Bms_Amps_Actual > Bms_Allowed_Current) {
+                shutdownHard(12);
             }
 
             //todo Anything this Arduino needs to do other than process received data
@@ -258,6 +275,7 @@ void shutdownHard(int errCode) {
     2. IMD loss of insulation
     3. Cockpit ESB
     4. IMD disconnect from tractive system 
+    5. Battery less than 10% capacity
     
     Resetable error codes:
     10. Lost communication
