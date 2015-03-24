@@ -55,30 +55,35 @@ void loop() {
   if (runLoop < millis()){//Runs 1x per second
     runLoop = millis() + 200;//Push runLoop up 1000 ms
 
-    pot1ValAdjusted = analogRead(pot1)-pot1Low;
+    //Read analog values all at once
+    pot1ValAdjusted = analogRead(pot1);
+    pot2ValAdjusted = analogRead(pot2);
+    pot3ValAdjusted = analogRead(pot3);
+
+    pot1ValAdjusted = pot1ValAdjusted - pot1Low;
     pot1ValAdjusted = pot1ValAdjusted * 1000;
     pot1ValAdjusted = pot1ValAdjusted / pot1Range;
 
-    pot2ValAdjusted = analogRead(pot2)-pot2Low;
+    pot2ValAdjusted = pot2ValAdjusted - pot2Low;
     pot2ValAdjusted = pot2ValAdjusted * 1000;
     pot2ValAdjusted = pot2ValAdjusted / pot2Range;
 
-    pot3ValAdjusted = analogRead(pot3)-pot3Low;
+    pot3ValAdjusted = pot3ValAdjusted - pot3Low;
     pot3ValAdjusted = pot3ValAdjusted * 1000;
     pot3ValAdjusted = pot3ValAdjusted / pot3Range;
 
-    String txt1 = "pot1 original val: ";
-    Serial.println(txt1 + analogRead(pot1));
-    String txt2 = "pot1ValAdjusted: ";
-    Serial.println(txt2 + pot1ValAdjusted);
-    String txt3 = "pot2 original val: ";
-    Serial.println(txt3 + analogRead(pot2));
-    String txt4 = "pot2ValAdjusted: ";
-    Serial.println(txt4 + pot2ValAdjusted);
-    String txt5 = "pot3 original val: ";
-    Serial.println(txt5 + analogRead(pot3));
-    String txt6 = "pot3ValAdjusted: ";
-    Serial.println(txt6 + pot3ValAdjusted);
+    Serial.print("pot1 original val: ")
+    Serial.println(analogRead(pot1));
+    Serial.print("pot1ValAdjusted: ")
+    Serial.println(pot1ValAdjusted);
+    Serial.print("pot2 original val: ")
+    Serial.println(analogRead(pot2));
+    Serial.print("pot2ValAdjusted: ")
+    Serial.println(pot2ValAdjusted);
+    Serial.print("pot3 original val: ")
+    Serial.println(analogRead(pot3));
+    Serial.print("pot3ValAdjusted: ")
+    Serial.println(pot3ValAdjusted);
 
     if(pot3ValAdjusted > 0) { //Brake light
         Serial.println("ar1:brake:1");
@@ -102,28 +107,28 @@ void loop() {
     if (torqueValAdjusted > 255) {
         torqueValAdjusted = 255;
     }
-    String txt7 = "Torque Value: ";
-    Serial.println(txt7 + torqueVal);
+    Serial.print("Torque Value: ")
+    Serial.println(torqueVal);
     String txt8 = "Adjusted torque (0-5): ";
     Serial.println(txt8 + torqueValAdjusted);
-    if(potAccDiff > 200){//Acceleration error check (Die if 20%+ difference between readings)
+    if (potAccDiff > 200) {//Acceleration error check (Die if 20%+ difference between readings)
         //todo error checking which can detect open circuit, short to ground and short to sensor power
         Serial.println("acceleration implausibility detected");
         analogWrite(pwmBmsTorque, 0);
-    }else {
-        if(pot3ValAdjusted > 0 && torqueVal >= 250) {//If brake pressed and torque pressed over 25%
+    } else {
+        if (pot3ValAdjusted > 0 && torqueVal >= 250) {//If brake pressed and torque pressed over 25%
             brakePlausActive = true;
             analogWrite(pwmBmsTorque, 0);
             Serial.println("brake plausibility activated");
-        }else {
-            if(brakePlausActive && torqueVal < 50) {//Motor deactivated but torque less than 5% (required before disabling brake plausibility)
+        } else {
+            if (brakePlausActive && torqueVal < 50) {//Motor deactivated but torque less than 5% (required before disabling brake plausibility)
                 brakePlausActive = false;
                 Serial.println("brake plausibility deactivated");
             }
-            if(!brakePlausActive) {//If brake plausibility is not active
+            if (!brakePlausActive) {//If brake plausibility is not active
                 analogWrite(pwmBmsTorque, torqueValAdjusted);
                 Serial.println("sending torque value to motor controller");
-            }else {//If brake plausibility is active
+            } else {//If brake plausibility is active
                 analogWrite(pwmBmsTorque, 0);
                 Serial.println("sending 0 to motor controller");
             }

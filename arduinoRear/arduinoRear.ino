@@ -9,17 +9,15 @@ BEGIN CONFIGURATION
 *************************************/
 #include <EEPROM.h>;
 
-int digitalRelay1 = 2;
-int digitalRelay2 = 3;
-int digitalRelay3 = 4;
-int digitalRelay4 = 5;
-int digitalRelay5 = 6;
-int digitalRelay6 = 7;
-int digitalImd1 = 9;
-int digitalImd2 = 10;
-int digitalLedErr = 13;//We might not need this
-int digitalBrake = 29;
-int digitalReady2DriveSound = 31;
+int digitalRelay1 = 53;
+int digitalRelay2 = 51;
+int digitalRelay3 = 49;
+int digitalRelay4 = 47;
+int digitalRelay5 = 45;
+int digitalRelay6 = 41;
+int digitalImd1 = 2;
+int digitalBrake = 31;
+int digitalReady2DriveSound = 29;
 int analogImdFaultReset = 0;
 int analogBmsFaultReset = 1;
 int analogMotorCtrlTemp = 2;
@@ -40,20 +38,29 @@ int analogBms5 = 15;
 END CONFIGURATION
 *************************************/
 
+String inputCmd1 = "";
 String inputCmd2 = "";
 String inputCmd3 = "";
+boolean stringComplete1 = false;
 boolean stringComplete2 = false;
 boolean stringComplete3 = false;
-unsigned long timeoutRx2;//Use Serial2 for Arduino 2 - Dash
-unsigned long timeoutRx3;//Use Serial3 for Arduino 3 - Battery
+unsigned long timeoutRx1;//Use Serial1 for Arduino 2 - Dash
+unsigned long timeoutRx2;//Use Serial2 for Arduino 4 - Battery 1
+unsigned long timeoutRx3;//Use Serial3 for Arduino 5 - Battery 2
 unsigned long runLoop;//Stores millisecond value to run main loop every so often (instead of using delay)
-boolean eepromCheckGood = false;//Used when checking if eeprom error code is set, triggers startup function
-serialErrorTxt1 = "Shutoff error code (must reset): ";
+boolean eepromCheckGood = false;//Used when checking if eeprom error code is set
+boolean eepromChecked = false;//Used so eeprom checked only once when starting or restarting
+boolean ready2Drive = false;
+int startupSequence = 0;
+int eepromErrCode = 0;//Holds eeprom error code
+int startupNote = 200;
 
 void setup() {
     Serial.begin(115200);//Talk back to computer
-    Serial2.begin(115200);
-    Serial3.begin(115200);
+    Serial1.begin(115200);//ar2
+    Serial2.begin(115200);//ar4
+    Serial3.begin(115200);//ar5
+    inputCmd1.reserve(50);
     inputCmd2.reserve(50);
     inputCmd3.reserve(50);
     //Initialize output pins
@@ -64,8 +71,6 @@ void setup() {
     pinMode(digitalRelay5, OUTPUT);
     pinMode(digitalRelay6, OUTPUT);
     pinMode(digitalImd1, OUTPUT);
-    pinMode(digitalImd2, OUTPUT);
-    pinMode(digitalLedErr, OUTPUT);
     pinMode(digitalBrake, OUTPUT);
     pinMode(digitalReady2DriveSound, OUTPUT);
     //Initialize input pins
@@ -86,103 +91,129 @@ void setup() {
     pinMode(analogBms5, INPUT);
 
     //Wait 1 second for communication before throwing error
+    timeoutRx1 = 1000;
     timeoutRx2 = 1000;
     timeoutRx3 = 1000;
     runLoop = 0;
 }
 
 void loop() {
-    if (!eepromCheckGood) {//Runs on startup and after high voltage shutdowns
-        unsigned long startupLoop = 0;//Stores ms value to run startup loop every so often
-        //Check if EEPROM error code was set
-        int eepromErrCode = EEPROM.read(0);
+    /*************************************
+    Commands that run whether or not car is ready to drive
+    *************************************/
+    if (stringComplete1) {//Received command from AR2
+        if (inputCmd2 == "ar1:restart") {
+            shutdownHard(0);
+        } else if (inputCmd2.substring(0,10) == "ar1:print:") {
+            Serial.print(millis());
+            Serial.print(" - ");
+            Serial.println(inputCmd2.substring(10));//todo make sure this works
+        } else if (inputCmd2 == "ar1:brake:1") {
+            digitalWrite(digitalBrake, HIGH);
+        } else if (inputCmd2 == "ar1:brake:0") {
+            digitalWrite(digitalBrake, LOW);
+        }
 
-        if (eepromErrCode == 255){//todo make sure this is correct blank code
-            eepromCheckGood = true;
+    inputCmd2 = "";
+    stringComplete2 = false;
+    }
+    /*************************************
+    End commands
+    *************************************/
+    if (!ready2Drive) {
+        if (!eepromChecked) {//Runs on startup and after high voltage shutdowns
+            //Check if EEPROM error code was set
+            eepromErrCode = EEPROM.read(0);
+            if (eepromErrCode == 255){//todo make sure this is correct blank code
+                eepromCheckGood = true;
+            }
+            if (eepromErrCode == 1) {
+                Serial1.println("ar2:amsBmsFaultLed:1");//Make dash Arduino turn on error light
+                Serial.println("BMS fault - please reset");
+            }
+            if (eepromErrCode == 2) {
+                Serial1.println("ar2:imdFaultLed:1");//Make dash Arduino turn on error light
+                Serial.println("IMD fault - please reset");
+            }
+            eepromChecked = true;
         }
-        if (eepromErrCode == 1) {
-            Serial2.println("ar2:amsBmsFaultLed:1");//Make dash Arduino turn on error light
-        }
-        if (eepromErrCode == 2) {
-            Serial2.println("ar2:imdFaultLed:1");//Make dash Arduino turn on error light
-        }
-        while (!eepromCheckGood) {//While there is an un reset eeprom error
+        if (!eepromCheckGood) {//While there is an un reset eeprom error
             //todo query BMS and do not start up if there's still an error
             if (eepromErrCode == 1 && analogRead(analogBmsFaultReset) > 1000) {//If eepromerrcode == 1 (BMS) and button pressed (5 volts reading when closed)
                 EEPROM.write(0,255);//Delete error from EEPROM
                 eepromCheckGood = true;//Exit this loop
-                Serial2.println("ar2:amsBmsFaultLed:0");//Make dash Arduino turn off error light
+                Serial1.println("ar2:amsBmsFaultLed:0");//Make dash Arduino turn off error light
+                Serial.println("BMS fault cleared");
             }
             if (eepromErrCode == 2 && analogRead(analogImdFaultReset) > 1000) {//If eepromerrcode == 2 (IMD) and button pressed (5 volts reading when closed)
                 EEPROM.write(0,255);//Delete error from EEPROM
                 eepromCheckGood = true;//Exit this loop
-                Serial2.println("ar2:imdFaultLed:0");//Make dash Arduino turn off error light
-            }
-            if (startupLoop < millis()) {
-                startupLoop = millis() + 500;//Run every .5 seconds
-                Serial.println(serialErrorTxt1 + eepromErrCode);//Send to computer
-                Serial2.println("ar2:waitErr");
-                Serial3.println("ar3:waitErr");
+                Serial1.println("ar2:imdFaultLed:0");//Make dash Arduino turn off error light
+                Serial.println("IMD fault cleared");
             }
         }
+        if (eepromChecked && eepromCheckGood) {//Eeprom check is finished
+            if (startupSequence == 0) {
+                //Begin startup sequence
+                Serial.println("Waiting to begin startup sequence");
 
-        //todo wait for initialize switch to activate relays 1-3
-        //Activate relay 4 (precharge) for at least 3 seconds
-        digitalWrite(digitalRelay4, HIGH);
-        unsigned long precharge = millis() + 3000;//Keep precharge on for 3 seconds
-        while (precharge > millis()) {
-            if (startupLoop < millis()) {
-                startupLoop = millis() + 500;//Run every .5 seconds
-                Serial.println("Precharge relay activated");
-                Serial2.println("ar2:waitPrecharge");
-                Serial3.println("ar3:waitPrecharge");
+                //todo wait for initialize switch to continue
+                if (false) {
+                    Serial.println("Startup sequence activated");
+                    startupSequence = 1;
+                }
+            }
+            if (startupSequence == 1) {
+                //Close relays 1, 3
+                digitalWrite(digitalRelay1, HIGH);
+                digitalWrite(digitalRelay3, HIGH);
+                startupSequence = 2;
+                runLoop = millis() + 1000;
+            }
+            if (startupSequence == 2 && runLoop < millis()) {//At least 1 second has passed since sequence part 1
+                //Close relays 2, precharge
+                digitalWrite(digitalRelay2, HIGH);
+                digitalWrite(digitalRelay5, HIGH);
+                startupSequence = 3;
+                runLoop = millis() + 3000;
+            }
+            if (startupSequence == 3 && runLoop < millis()) {
+                //todo check voltage behind dcdc converter (tractive active lights)
+                if (false) {
+                    //todo wait for button press
+                    if (false) {
+                        digitalWrite(digitalRelay6, HIGH);
+                        digitalWrite(digitalRelay5, LOW);
+                        digitalWrite(digitalRelay4, HIGH);
+                        startupSequence = 4;
+                        runLoop = millis() + 2000;
+                        Serial.println("Playing ready 2 drive sound");
+                    }
+                }
+            }
+            if (startupSequence == 4 && runLoop > millis()) {
+                //Ready to drive sound
+                tone(digitalReady2DriveSound, startupNote);
+                note += 2;
+            }
+            if (startupSequence == 4 && runLoop < millis()) {
+                Serial.println("Vehicle ready to drive");
+                Serial1.println("ar2:ready2Drive");
+                Serial1.println("ar3:ready2Drive");
             }
         }
-        //todo then wait for activation switch (maybe)
-        //Activate relay 5 (AIR 4) and relay 6 and disable precharge immediately
-        digitalWrite(digitalRelay5, HIGH);
-        digitalWrite(digitalRelay6, HIGH);
-        digitalWrite(digitalRelay4, LOW);
-        //Ready to drive sound
-        unsigned long ready2DriveSound = millis() + 2000;//Stores ms value to stop ready to drive sound after 2 seconds
-        int note = 290;
-        startupLoop = millis();
-        while (ready2DriveSound > millis()) {//Keep drive sound on for 2 seconds but cont. sending serial comm.
-            if (startupLoop < millis()) {
-                startupLoop = millis() + 500;//Run every .5 seconds
-                note += 150;
-                tone(digitalReady2DriveSound, note, 500);
-                Serial.println("Playing ready 2 drive sound");
-                Serial2.println("ar2:waitR2D");
-                Serial3.println("ar3:waitR2D");
-            }
-        }
-        Serial2.println("ar2:ready2Drive");
-        Serial3.println("ar3:ready2Drive");
     }
-    else {//No eeprom errors
-        if (stringComplete2) {//Received command from AR2
-            if (inputCmd2.substring(0,3) == "ar3") {//Is this command meant for Arduino 3?
-                Serial3.println(inputCmd2);
-                Serial.println("Relayed from ar2 to ar3: "+inputCmd2);
-            } else if (inputCmd2 == "ar1:restart") {
-                shutdownHard(0);
-            } else if (inputCmd2 == "ar1:brake:1") {
-                digitalWrite(digitalBrake, HIGH);
-            } else if (inputCmd2 == "ar1:brake:0") {
-                digitalWrite(digitalBrake, LOW);
-            }
 
-        inputCmd2 = "";
-        stringComplete2 = false;
-        }
-        if (stringComplete3) {//Received command from AR3
-            if (inputCmd3.substring(0,3) == "ar2") {//If command meant for Arduino 2
-                Serial2.println(inputCmd3);//todo this is untested
-                Serial.println("Relayed from ar3 to ar2: "+inputCmd3);
-            }
+    else {//No eeprom errors
+        if (stringComplete3) {//Received command from ar3
+            //Put stuff here
             inputCmd3 = "";
             stringComplete3 = false;
+        }
+        if (stringComplete4) {//Received command from ar4
+            //Put stuff here
+            inputCmd4 = "";
+            stringComplete4 = false;
         }
         if (runLoop < millis()) {//Runs 10x per second
             runLoop = millis() + 100;//Push runLoop up 100 ms
@@ -203,42 +234,64 @@ void loop() {
             //todo Anything this Arduino needs to do other than process received data
         }
     }
-    if (timeoutRx2 < millis() || timeoutRx3 < millis()) {//If 1 second has passed since receiving a complete command from both Arduinos turn off low voltage ***SOMETHING HAS GONE WRONG***
+
+
+    serialTimeout();
+}
+
+void serialTimeout() {
+    if (timeoutRx1 < millis() || timeoutRx2 < millis() || timeoutRx3 < millis()) {//If 1 second has passed since receiving a complete command from all 3 connected Arduinos turn off low voltage ***SOMETHING HAS GONE WRONG***
         Serial.println(millis());
-        if(timeoutRx2 < millis()) {
+        if(timeoutRx1 < millis()) {
             Serial.println("ar1 lost connection to ar2");
         }
+        if(timeoutRx2 < millis()) {
+            Serial.println("ar1 lost connection to ar4");
+        }
         if(timeoutRx3 < millis()) {
-            Serial.println("ar1 lost connection to ar3");
+            Serial.println("ar1 lost connection to ar5");
         }
         shutdownHard(10);
     }
 }
 
-void serialEvent2() {//Receive bytes from AR2
-  while (Serial2.available()) {
-    char newChar = (char)Serial2.read();
-    if (newChar == '\n') {//NOTE: inputCmd2 does NOT include \n
-      stringComplete2 = true;
-      timeoutRx2 = millis() + 1000; //Number of milliseconds since program started, plus 1000, used to timeout if no complete command received for 1 second
-      Serial.println("recvd ar2: "+inputCmd2);
-    }else {
-      inputCmd2 += newChar;
+void serialEvent1() {//Receives commands from ar2
+    while (Serial1.available()) {
+        char newChar = (char)Serial1.read();
+        if (newChar == '\n') {//NOTE: inputCmd1 does NOT include \n
+            stringComplete1 = true;
+            timeoutRx1 = millis() + 1000; //Number of milliseconds since program started, plus 1000, used to timeout if no complete command received for 1 second
+            Serial.println("recvd ar2: "+inputCmd1);
+        }else {
+            inputCmd1 += newChar;
+        }
     }
-  }
 }
 
-void serialEvent3() {//Receive bytes from AR3
-  while (Serial3.available()) {
-    char newChar = (char)Serial3.read();
-    if (newChar == '\n') {//NOTE: inputCmd3 does NOT include \n
-      stringComplete3 = true;
-      timeoutRx3 = millis() + 1000; //Number of milliseconds since program started, plus 1000, used to timeout if no complete command received for 1 second
-      Serial.println("recvd ar3: "+inputCmd3);
-    } else {
-      inputCmd3 += newChar;
+void serialEvent2() {//Receives commands from ar4
+    while (Serial2.available()) {
+        char newChar = (char)Serial2.read();
+        if (newChar == '\n') {//NOTE: inputCmd2 does NOT include \n
+            stringComplete2 = true;
+            timeoutRx2 = millis() + 1000; //Number of milliseconds since program started, plus 1000, used to timeout if no complete command received for 1 second
+            Serial.println("recvd ar4: "+inputCmd2);
+        }else {
+            inputCmd2 += newChar;
+        }
     }
-  }
+}
+
+void serialEvent3() {//Receives commands from ar5
+    while (Serial3.available()) {
+        char newChar = (char)Serial3.read();
+        if (newChar == '\n') {//NOTE: inputCmd3 does NOT include \n
+            stringComplete3 = true;
+            timeoutRx3 = millis() + 1000; //Number of milliseconds since program started, plus 1000, used to timeout if no complete command received for 1 second
+            Serial.println("recvd ar5: "+inputCmd3);
+        } else {
+            inputCmd3 += newChar;
+        }
+    }
 }
 
 void shutdownHard(int errCode) {
@@ -251,13 +304,13 @@ void shutdownHard(int errCode) {
     Resetable error codes:
     10. Lost communication
     11. Acceleration implausibility
-    12. Too much power (>=5kW)
     */
     //ALL shutdowns
     digitalWrite(digitalRelay1, LOW);
     digitalWrite(digitalRelay2, LOW);
     digitalWrite(digitalRelay3, LOW);
-    digitalWrite(digitalRelay4, LOW);//todo which relays do I turn off?
+    digitalWrite(digitalRelay4, LOW);
+    digitalWrite(digitalRelay6, LOW);//Close discharge AIR
     //BMS shutdown (a work in progress)
     if (errCode == 1) {
         EEPROM.write(0,1);
@@ -273,8 +326,9 @@ void shutdownHard(int errCode) {
         }
     }
     Serial.println(errCode);//Now send to computer
-    Serial2.println("ar2:restart");
-    Serial3.println("ar3:restart");
+    Serial1.println("ar2:restart");
+    Serial1.println("ar3:restart");
+    //todo ar4 & ar5 don't need to reset right?
     eepromCheckGood = false;
 }
 
