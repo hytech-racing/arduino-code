@@ -7,8 +7,17 @@ Use: Show values on LCD
 /*************************************
 BEGIN CONFIGURATION
 *************************************/
-#include <Adafruit_GFX.h>    // Core graphics library
-#include <Adafruit_TFTLCD.h> // Hardware-specific library
+************************ screen config
+#include <Adafruit_GFX.h>
+#include <Adafruit_HX8357.h>
+#include <SPI.h>
+#include <stdint.h>
+#define TFT_CS 10
+#define TFT_DC 9
+#define TFT_RST 8
+Adafruit_HX8357 tft = Adafruit_HX8357(TFT_CS, TFT_DC, TFT_RST);
+int oldCtcleDisplay = 0; // so we know if there is a change in cycle display
+**************************** end screen config
 
 int ledPinWaterPumpAlert = 11;
 int ledPinImdFault = 12;
@@ -29,6 +38,14 @@ unsigned long runLoop;//Stores millisecond value to run main loop every so often
 
 int cycleDisplay = 1;//Stores which view to send to LCD
 
+float torqueVal;//0-1000 mapped value for torque
+float torqueValAdjusted;//Adjusted exponentially
+
+int rpmVal = 0; // not sure if we will read in the values for RPM or not
+
+boolean regenActive = false;
+
+boolean brakePlausActive = false;//Set to true if brakes actuated && torque encoder > 25%
 boolean ready2Drive = false;//Set to false on startup and soft restart
 boolean resetRun = true;//Set to false on soft restart (turns true after this arduino resets stuff in its scope)
 
@@ -44,6 +61,7 @@ void setup() {
     timeoutRx1 = 1000;
     timeoutRx2 = 1000;
     runLoop = 0;
+    initScreen() // function defined below
 }
 
 void loop() {
@@ -112,13 +130,17 @@ void loop() {
 
         //Update LCD todo this needs to be fleshed out
         if (cycleDisplay == 1) {//Default view
-            void setCursor(uint16_t 10, uint16_t 10);
-            void setTextColor(uint16_t 0x0000, uint16_t 0xFFFF);
-            void setTextSize(uint8_t 3);
-            print(torqueVal);
+            tft.setCursor(298, 10);
+            tft.print(torqueValAdjusted);
+            tft.setCursor(298, 160);
+            tft.print(rpmVal); // if we ever get an rpm value
 
         } else if (cycleDisplay == 2) {
-            //todo Alternate display
+            //need to decide on an alternate display
+            tft.setCursor(298, 10);
+            tft.print(torqueValAdjusted);
+            tft.setCursor(298, 160);
+            tft.print(rpmVal); // if we ever get an rpm value
         }
 
     }
@@ -137,6 +159,10 @@ void serialTimeout() {
         Serial1.println("ar1:restart");
         ready2Drive = false;
         runStartupErrCheck = true;
+
+        tft.setTextColor(0xF800);
+        tft.setCursor(298, 160);
+        tft.print("Serial connection lost");
     }
 }
 
@@ -162,4 +188,23 @@ void SerialEvent2() {
             inputCmd2 += newChar;
         }
     }
+}
+
+void initScreen() {
+    tft.setRotation(3);
+    tft.fillScreen(0xFFFF);
+    tft.setCursor(uint16_t 10, uint16_t 10);
+    tft.setTextColor(uint16_t 0x0000, uint16_t 0xD5A8); // black text on old gold screen
+    tft.setTextSize(uint8_t 6);
+    tft.print("Torque: ");
+    tft.setCursor(80, 118);
+    tft.print("RPM: ");
+    tft.setCursor(118, 160);
+    tft.print("ERR ");
+    tft.setTextSize(1);
+    tft.setCursor(10, 300);
+    tft.setTextColor(0xFFFF, 0xD5A8);
+    tft.print("HyTech Racing 2015. You can't get much more ramblin' than this");
+    tft.setTextColor(0x0000, 0xD5A8);
+    tft.setTextSize(0x06);
 }
