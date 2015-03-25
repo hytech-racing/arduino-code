@@ -7,7 +7,7 @@ Use: Show values on LCD
 /*************************************
 BEGIN CONFIGURATION
 *************************************/
-************************ screen config
+/************************ screen config */
 #include <Adafruit_GFX.h>
 #include <Adafruit_HX8357.h>
 #include <SPI.h>
@@ -17,7 +17,7 @@ BEGIN CONFIGURATION
 #define TFT_RST 8
 Adafruit_HX8357 tft = Adafruit_HX8357(TFT_CS, TFT_DC, TFT_RST);
 int oldCtcleDisplay = 0; // so we know if there is a change in cycle display
-**************************** end screen config
+/**************************** end screen config */
 
 int ledPinWaterPumpAlert = 11;
 int ledPinImdFault = 12;
@@ -47,7 +47,6 @@ boolean regenActive = false;
 
 boolean brakePlausActive = false;//Set to true if brakes actuated && torque encoder > 25%
 boolean ready2Drive = false;//Set to false on startup and soft restart
-boolean resetRun = true;//Set to false on soft restart (turns true after this arduino resets stuff in its scope)
 
 void setup() {
     Serial1.begin(115200);//Talk to ar1
@@ -61,26 +60,15 @@ void setup() {
     timeoutRx1 = 1000;
     timeoutRx2 = 1000;
     runLoop = 0;
-    initScreen() // function defined below
+    initScreen(); // function defined below
 }
 
 void loop() {
-
-    if (!ready2Drive && !resetRun) {
-        //todo reset stuff like error LEDs (also make sure ar1 sends errors after this loop runs)
-        //todo this part might need to happen on a soft restart below
-        digitalWrite(ledPinWaterPumpAlert, LOW);
-        digitalWrite(ledPinImdFault, LOW);
-        digitalWrite(ledPinAmsBmsFault, LOW);
-        resetRun = true;
-    }
-
     if (stringComplete1) {//Recieved something from ar1
         if (inputCmd1.substring(0,11) == "ar2:restart") {
             //Restarting vehicle
-            ready2Drive = false;
-            //todo show error on screen
-        }else if (inputCmd1.subtring(0,4) == "ar3:") {
+            reset();
+        }else if (inputCmd1.substring(0,4) == "ar3:") {
             Serial2.println(inputCmd1);
         }else if (inputCmd1 == "ar2:ready2Drive") {
             ready2Drive = true;
@@ -148,7 +136,7 @@ void loop() {
 
 void serialTimeout() {
     if (timeoutRx1 < millis() || timeoutRx2 < millis()) {//If 1 second has passed since receiving a complete command from both Arduinos reset ***SOMETHING HAS GONE WRONG***
-        Serial.print("ar1:print:")
+        Serial.print("ar1:print:");
         Serial.println(millis());
         if(timeoutRx1 < millis()) {
             Serial1.println("ar2 lost connection to ar1");
@@ -157,8 +145,7 @@ void serialTimeout() {
             Serial1.println("ar2 lost connection to ar3");
         }
         Serial1.println("ar1:restart");
-        ready2Drive = false;
-        runStartupErrCheck = true;
+        reset();
 
         tft.setTextColor(0xF800);
         tft.setCursor(298, 160);
@@ -170,7 +157,7 @@ void SerialEvent1() {
     while (Serial1.available()) {
         char newChar = (char)Serial1.read();
         if (newChar == '\n') {//NOTE: inputCmd1 does NOT include \n
-            stringComplete = true;
+            stringComplete1 = true;
             timeoutRx1 = millis() + 1000; //Number of milliseconds since program started, plus 1000, used to timeout if no complete command received for 1 second
         }else {
             inputCmd1 += newChar;
@@ -182,7 +169,7 @@ void SerialEvent2() {
     while (Serial2.available()) {
         char newChar = (char)Serial2.read();
         if (newChar == '\n') {//NOTE: inputCmd2 does NOT include \n
-            stringComplete = true;
+            stringComplete2 = true;
             timeoutRx2 = millis() + 1000; //Number of milliseconds since program started, plus 1000, used to timeout if no complete command received for 1 second
         }else {
             inputCmd2 += newChar;
@@ -207,4 +194,14 @@ void initScreen() {
     tft.print("HyTech Racing 2015. You can't get much more ramblin' than this");
     tft.setTextColor(0x0000, 0xD5A8);
     tft.setTextSize(0x06);
+}
+
+void reset() {
+    ready2Drive = false;
+    //todo show error on screen
+    //todo reset stuff like error LEDs (also make sure ar1 sends errors after this loop runs)
+    //todo this part might need to happen on a soft restart below
+    digitalWrite(ledPinWaterPumpAlert, LOW);
+    digitalWrite(ledPinImdFault, LOW);
+    digitalWrite(ledPinAmsBmsFault, LOW);
 }

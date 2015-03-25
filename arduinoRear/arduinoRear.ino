@@ -9,7 +9,6 @@ BEGIN CONFIGURATION
 *************************************/
 #include <EEPROM.h>;
 
-<<<<<<< HEAD
 int digitalRelay1 = 53;
 int digitalRelay2 = 51;
 int digitalRelay3 = 49;
@@ -34,12 +33,21 @@ int Bms_SOC = 11;
     int Bms_SOC_Val = 0;
 int Bms_Amps = 12;
     int Bms_Amps_Val = 0;
-    Bms_Amps_Actual = 0;
-    Bms_Allowed_Current = 0;
+    int Bms_Amps_Actual = 0;
+    int Bms_Allowed_Current = 0;
 int Bms_DCL = 13;
     int Bms_DCL_Val = 0;
 int analogBms4 = 14;
 int analogBms5 = 15;
+
+/**Added by Nathan C to force it to compile*/
+int analogBms1 = 0;
+int analogBms2 = 0;
+int analogBms3 = 0;
+unsigned long highPulse;
+unsigned long lowPulse;
+unsigned long totalPulse;
+unsigned long AmpsOutReading;
 
 /*************************************
 END CONFIGURATION
@@ -122,7 +130,7 @@ void loop() {
         }
 
     inputCmd2 = "";
-    stringComplete2 = false;
+    stringComplete1 = false;
     }
     /*************************************
     End commands
@@ -142,6 +150,10 @@ void loop() {
                 Serial1.println("ar2:imdFaultLed:1");//Make dash Arduino turn on error light
                 Serial.println("IMD fault - please reset");
             }
+            if (eepromErrCode == 3) {
+                Serial1.println("ar2:initSwitchFault:1");
+                Serial.println("Init switch in improper position");
+            }
             eepromChecked = true;
         }
         if (!eepromCheckGood) {//While there is an un reset eeprom error
@@ -157,6 +169,12 @@ void loop() {
                 eepromCheckGood = true;//Exit this loop
                 Serial1.println("ar2:imdFaultLed:0");//Make dash Arduino turn off error light
                 Serial.println("IMD fault cleared");
+            }
+            if (eepromErrCode == 3 && false) { //todo check if init switch in proper position
+                EEPROM.write(0,255);//Delete error from EEPROM
+                eepromCheckGood = true;//Exit this loop
+                Serial1.println("ar2:initSwitchFault:0");//Make dash Arduino turn off error light
+                Serial.println("Init switch position fault cleared");
             }
         }
         if (eepromChecked && eepromCheckGood) {//Eeprom check is finished
@@ -201,26 +219,30 @@ void loop() {
             if (startupSequence == 4 && runLoop > millis()) {
                 //Ready to drive sound
                 tone(digitalReady2DriveSound, startupNote);
-                note += 2;
+                startupNote += 2;
             }
             if (startupSequence == 4 && runLoop < millis()) {
                 Serial.println("Vehicle ready to drive");
                 Serial1.println("ar2:ready2Drive");
                 Serial1.println("ar3:ready2Drive");
+                ready2Drive = true;
+                startupSequence = 0;//Reset the startup sequence
+                eepromChecked = false;
+                eepromCheckGood = false;
             }
         }
     }
 
     else {//No eeprom errors
-        if (stringComplete3) {//Received command from ar3
+        if (stringComplete2) {//Received command from ar4
+            //Put stuff here
+            inputCmd2 = "";
+            stringComplete2 = false;
+        }
+        if (stringComplete3) {//Received command from ar5
             //Put stuff here
             inputCmd3 = "";
             stringComplete3 = false;
-        }
-        if (stringComplete4) {//Received command from ar4
-            //Put stuff here
-            inputCmd4 = "";
-            stringComplete4 = false;
         }
         if (runLoop < millis()) {//Runs 10x per second
             runLoop = millis() + 100;//Push runLoop up 100 ms
@@ -252,7 +274,7 @@ void loop() {
             Bms_Amps_Val = analogRead(Bms_Amps);
             Bms_DCL_Val = analogRead(Bms_DCL);
             Bms_Amps_Actual = (map(AmpsOutReading, 0, 1024, 0, 1250)-(1250/2)); // NEED TO USE CHANNEL 2 OF CURRENT SENSOR
-            Bms_Allowed_Current = map(Bms_DCL_Val, 0, 1024, 0, 200) // CHANGE 200 TO OUR MAX ALLOWED CURRENT
+            Bms_Allowed_Current = map(Bms_DCL_Val, 0, 1024, 0, 200); // CHANGE 200 TO OUR MAX ALLOWED CURRENT
             if (Bms_SOC_Val < 102) { // less than 10% of battery left
                 shutdownHard(5);
             }
@@ -356,11 +378,13 @@ void shutdownHard(int errCode) {
             EEPROM.write(0,3);
         }
     }
+    Serial.print(millis());
+    Serial.print(" - Shutting down - ");
     Serial.println(errCode);//Now send to computer
     Serial1.println("ar2:restart");
     Serial1.println("ar3:restart");
     //todo ar4 & ar5 don't need to reset right?
-    eepromCheckGood = false;
+    ready2Drive = false;
 }
 
 /*ALL SHUTDOWNS
