@@ -23,6 +23,33 @@ int ledPinWaterPumpAlert = 11;
 int ledPinImdFault = 12;
 int ledPinAmsBmsFault = 13;
 int analogCycleDisplay = 8;
+int analogSwitch1a = 22;
+int analogSwitch1b = 24;
+int analogSwitch2 = 26;
+int analogSwitch3a = 28;
+int analogSwitch3b = 30;
+int analogSwitch4a = 32;
+int analogSwitch4b = 34;
+
+int pot1 = 0;//Pot1 and Pot2 used for acceleration
+int pot2 = 1;
+int pot3 = 2;//Pot3 used for brake
+int pot1High = 650;//Pedal pressed
+int pot1Low = 275;//Pedal resting//todo right now the low vals are when a little pressure is applied
+int pot2High = 650;
+int pot2Low = 275;
+int pot3High = 689;//Pot3 used for brake
+int pot3Low = 210;
+float pot1ValAdjusted;
+float pot2ValAdjusted;
+float pot3ValAdjusted;
+float potAccAdjDiff;//Holds the difference between two accelerator readings
+float pot1Range = pot1High - pot1Low;//Ranges that each pot will move (used for percentage calcs)
+float pot2Range = pot2High - pot2Low;
+float pot3Range = pot3High - pot3Low;
+float torqueVal;//0-1000 mapped value for torque
+float torqueValAdjusted;//0-255 adjusted exponentially
+boolean brakePlausActive = false;//Set to true if brakes actuated && torque encoder > 25%
 
 /*************************************
 END CONFIGURATION
@@ -47,6 +74,11 @@ boolean regenActive = false;
 
 boolean brakePlausActive = false;//Set to true if brakes actuated && torque encoder > 25%
 boolean ready2Drive = false;//Set to false on startup and soft restart
+int dashSwitch1Val = -1;
+int dashSwitch2Val = -1;
+int dashSwitch3Val = -1;
+int dashSwitch4Val = -1;
+boolean sendSwitchValsThisLoop = false;
 
 void setup() {
     Serial1.begin(115200);//Talk to ar1
@@ -64,6 +96,52 @@ void setup() {
 }
 
 void loop() {
+    if (dashSwitch1Val != 0 && analogRead(analogSwitch1a) > 500) {//Change to low (0)
+        dashSwitch1Val = 0;
+        sendSwitchValsThisLoop = true;
+    } else if (dashSwitch1Val != 2 && analogRead(analogSwitch1b) > 500) {//Change to high (2)
+        dashSwitch1Val = 2;
+        sendSwitchValsThisLoop = true;
+    } else if (dashSwitch1Val != 1 && analogRead(analogSwitch1a) < 500 && analogRead(analogSwitch1b) < 500) {//Change to neutral (1)
+        dashSwitch1Val = 1;
+        sendSwitchValsThisLoop = true;
+    }
+    if (dashSwitch2Val != 1 && analogRead(analogSwitch2) > 500) {//Change to low (0)
+        dashSwitch2Val = 1;
+        sendSwitchValsThisLoop = true;
+    } else if (dashSwitch2Val != 0 && analogRead(analogSwitch2) < 500) {//Change to high (1)
+        dashSwitch2Val = 0;
+        sendSwitchValsThisLoop = true;
+    }
+    if (dashSwitch3Val != 0 && analogRead(analogSwitch3a) > 500) {//Change to low (0)
+        dashSwitch3Val = 0;
+        sendSwitchValsThisLoop = true;
+    } else if (dashSwitch3Val != 2 && analogRead(analogSwitch3b) > 500) {//Change to high (2)
+        dashSwitch3Val = 2;
+        sendSwitchValsThisLoop = true;
+    } else if (dashSwitch3Val != 1 && analogRead(analogSwitch3a) < 500 && analogRead(analogSwitch3b) < 500) {//Change to neutral (1)
+        dashSwitch3Val = 1;
+        sendSwitchValsThisLoop = true;
+    }
+    if (dashSwitch4Val != 0 && analogRead(analogSwitch4a) > 500) {//Change to low (0)
+        dashSwitch4Val = 0;
+        sendSwitchValsThisLoop = true;
+    } else if (dashSwitch4Val != 2 && analogRead(analogSwitch4b) > 500) {//Change to high (2)
+        dashSwitch4Val = 2;
+        sendSwitchValsThisLoop = true;
+    } else if (dashSwitch4Val != 1 && analogRead(analogSwitch4a) < 500 && analogRead(analogSwitch4b) < 500) {//Change to neutral (1)
+        dashSwitch4Val = 1;
+        sendSwitchValsThisLoop = true;
+    }
+    if (sendSwitchValsThisLoop) {
+        Serial1.print("ar1:dashSwitches:");
+        Serial1.print(dashSwitch1Val);
+        Serial1.print(dashSwitch2Val);
+        Serial1.print(dashSwitch3Val);
+        Serial1.println(dashSwitch4Val);
+        sendSwitchValsThisLoop = false;
+    }
+
     if (stringComplete1) {//Recieved something from ar1
         if (inputCmd1.substring(0,11) == "ar2:restart") {
             //Restarting vehicle
@@ -131,6 +209,83 @@ void loop() {
             tft.print(rpmVal); // if we ever get an rpm value
         }
 
+        /******************************
+        Throttle reading code
+        ******************************/
+        //Read analog values all at once
+        pot1ValAdjusted = analogRead(pot1);
+        pot2ValAdjusted = analogRead(pot2);
+        pot3ValAdjusted = analogRead(pot3);
+
+        if (pot1ValAdjusted > 1000 || pot1ValAdjusted < 10 || pot2ValAdjusted > 1000 || pot2ValAdjusted < 10) {
+            Serial1.println("ar1:restart");
+            Serial1.println("ar1:print:Throttle encoder short detected");
+        }
+
+        //Now calculate remapped values
+        pot1ValAdjusted = pot1ValAdjusted - pot1Low;
+        pot1ValAdjusted = pot1ValAdjusted * 1000;
+        pot1ValAdjusted = pot1ValAdjusted / pot1Range;//new mapped value from 0-1000
+
+        pot2ValAdjusted = pot2ValAdjusted - pot2Low;
+        pot2ValAdjusted = pot2ValAdjusted * 1000;
+        pot2ValAdjusted = pot2ValAdjusted / pot2Range;
+
+        pot3ValAdjusted = pot3ValAdjusted - pot3Low;
+        pot3ValAdjusted = pot3ValAdjusted * 1000;
+        pot3ValAdjusted = pot3ValAdjusted / pot3Range;
+
+        potAccAdjDiff = abs(pot1ValAdjusted-pot2ValAdjusted);//Get difference between torque sensors
+        if (pot2ValAdjusted > pot1ValAdjusted) {//Torque is lowest of two torque sensors
+            torqueVal = pot1ValAdjusted;
+        } else {
+            torqueVal = pot2ValAdjusted;
+        }
+        if (torqueVal < 0) {
+            torqueValAdjusted = 0;
+        } else {
+            torqueValAdjusted = 255 * pow((torqueVal/1000), 2);
+        }
+        if (torqueValAdjusted > 255) {
+            torqueValAdjusted = 255;
+        }
+        Serial.print("ar1:print:Throttle value ");
+        Serial.println(torqueValAdjusted);//Prints torque value to computer
+
+        if (pot3ValAdjusted > 0) { //Brake light
+            Serial.println("ar1:brake:1");
+            Serial.println("ar1:print:Brake lights on");
+        } else {
+            Serial.println("ar1:brake:0");
+            Serial.println("ar1:print:Brake lights off");
+        }
+
+        if (potAccDiff > 200) {//Acceleration error check (Die if 20%+ difference between readings)
+            //todo error checking which can detect open circuit, short to ground and short to sensor power
+            //todo does this need to shut down car or just send 0 torque val?
+            //todo put error on screen
+            Serial.println("ar1:print:Acceleration Implausibility on")
+        } else {
+            //todo remove error from screen
+            Serial.println("ar1:print:Acceleration Implausibility off")
+            if (pot3ValAdjusted > 0 && torqueVal >= 250) {//If brake pressed and torque pressed over 25%
+                brakePlausActive = true;
+                //todo put error on screen
+                //todo put 0 throttle on screen
+                Serial.println("ar1:print:Brake plausibility on");
+            } else {
+                if (brakePlausActive && torqueVal < 50) {//Motor deactivated but torque less than 5% (required before disabling brake plausibility)
+                    brakePlausActive = false;
+                    //todo remove error from screen
+                    Serial.println("ar1:print:Brake plausibility off");
+                }
+                if (!brakePlausActive) {//If brake plausibility is not active
+                    //todo put throttle on screen
+                } else {//If brake plausibility is active
+                    //todo put 0 throttle on screen
+                }
+            }
+        }
     }
 }
 

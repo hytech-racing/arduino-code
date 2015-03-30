@@ -69,6 +69,10 @@ boolean ready2Drive = false;
 int startupSequence = 0;
 int eepromErrCode = 0;//Holds eeprom error code
 int startupNote = 200;
+int dashSwitch1Val = -1;
+int dashSwitch2Val = -1;
+int dashSwitch3Val = -1;
+int dashSwitch4Val = -1;
 
 void setup() {
     Serial.begin(115200);//Talk back to computer
@@ -123,7 +127,16 @@ void loop() {
             Serial.print(millis());
             Serial.print(" - ");
             Serial.println(inputCmd2.substring(10));//todo make sure this works
-        } else if (inputCmd2 == "ar1:brake:1") {
+        } else if (inputCmd2.substring(0,17) == "ar1:dashSwitches:") {
+            char switchRead = inputCmd2.charAt(17);
+            dashSwitch1Val = switchRead - '0';//todo make sure char to int conversion works
+            char switchRead = inputCmd2.charAt(18);
+            dashSwitch2Val = switchRead - '0';
+            char switchRead = inputCmd2.charAt(19);
+            dashSwitch3Val = switchRead - '0';
+            char switchRead = inputCmd2.charAt(20);
+            dashSwitch4Val = switchRead - '0';
+        }else if (inputCmd2 == "ar1:brake:1") {
             digitalWrite(digitalBrake, HIGH);
         } else if (inputCmd2 == "ar1:brake:0") {
             digitalWrite(digitalBrake, LOW);
@@ -150,10 +163,6 @@ void loop() {
                 Serial1.println("ar2:imdFaultLed:1");//Make dash Arduino turn on error light
                 Serial.println("IMD fault - please reset");
             }
-            if (eepromErrCode == 3) {
-                Serial1.println("ar2:initSwitchFault:1");
-                Serial.println("Init switch in improper position");
-            }
             eepromChecked = true;
         }
         if (!eepromCheckGood) {//While there is an un reset eeprom error
@@ -170,61 +179,76 @@ void loop() {
                 Serial1.println("ar2:imdFaultLed:0");//Make dash Arduino turn off error light
                 Serial.println("IMD fault cleared");
             }
-            if (eepromErrCode == 3 && false) { //todo check if init switch in proper position
-                EEPROM.write(0,255);//Delete error from EEPROM
-                eepromCheckGood = true;//Exit this loop
-                Serial1.println("ar2:initSwitchFault:0");//Make dash Arduino turn off error light
-                Serial.println("Init switch position fault cleared");
-            }
         }
         if (eepromChecked && eepromCheckGood) {//Eeprom check is finished
             if (startupSequence == 0) {
-                //Begin startup sequence
-                Serial.println("Waiting to begin startup sequence");
-
-                //todo wait for initialize switch to continue
-                if (false) {
-                    Serial.println("Startup sequence activated");
+                if (dashSwitch1Val != 1) {//Bypass switch is not neutral
+                    Serial1.println("ar2:initSwitchFault:1");
+                    Serial.println("Init switch in improper position");
+                }
+                if (dashSwitch1Val == 1 && dashSwitch2Val == 0) {//Bypass switch is neutral and init button not pressed
+                    Serial1.println("ar2:initSwitchFault:0");//Make dash Arduino turn off error light
+                    Serial.println("Init switch position fault cleared");
                     startupSequence = 1;
                 }
             }
             if (startupSequence == 1) {
+                //Begin startup sequence
+                Serial.println("Waiting to begin startup sequence");
+
+                if (dashSwitch2Val == 1) {//wait for initialize switch to continue
+                    Serial.println("Startup sequence activated");
+                    startupSequence = 2;
+                }
+            }
+            if (startupSequence == 2) {
                 //Close relays 1, 3
                 digitalWrite(digitalRelay1, HIGH);
                 digitalWrite(digitalRelay3, HIGH);
-                startupSequence = 2;
+                startupSequence = 3;
                 runLoop = millis() + 1000;
             }
-            if (startupSequence == 2 && runLoop < millis()) {//At least 1 second has passed since sequence part 1
+            if (startupSequence == 3 && runLoop < millis()) {//At least 1 second has passed since sequence part 1
                 //Close relays 2, precharge
                 digitalWrite(digitalRelay2, HIGH);
                 digitalWrite(digitalRelay5, HIGH);
-                startupSequence = 3;
+                startupSequence = 4;
                 runLoop = millis() + 3000;
             }
-            if (startupSequence == 3 && runLoop < millis()) {
+            if (startupSequence == 4 && runLoop < millis()) {
                 //todo check voltage behind dcdc converter (tractive active lights)
                 if (false) {
-                    //todo wait for button press
-                    if (false) {
+                    //todo turn on led
+                    if (dashSwitch2Val == 1) {//wait for button press
                         digitalWrite(digitalRelay6, HIGH);
                         digitalWrite(digitalRelay5, LOW);
                         digitalWrite(digitalRelay4, HIGH);
-                        startupSequence = 4;
-                        runLoop = millis() + 2000;
-                        Serial.println("Playing ready 2 drive sound");
+                        startupSequence = 5;
                     }
                 }
             }
-            if (startupSequence == 4 && runLoop > millis()) {
+            if (startupSequence == 5) {
+                if (dashSwitch1Val == 0) {//wait till init switch is down
+                    startupSequence = 6;
+                }
+            }
+            if (startupSequence == 6) {
+                if (dashSwitch2Val == 1) {//wait till init button is pressed again
+                    runLoop = millis() + 2000;
+                    Serial.println("Playing ready 2 drive sound");
+                    startupSequence = 7;
+                }
+            }
+            if (startupSequence == 7 && runLoop > millis()) {
                 //Ready to drive sound
                 tone(digitalReady2DriveSound, startupNote);
                 startupNote += 2;
             }
-            if (startupSequence == 4 && runLoop < millis()) {
+            if (startupSequence == 7 && runLoop < millis()) {
                 Serial.println("Vehicle ready to drive");
                 Serial1.println("ar2:ready2Drive");
                 Serial1.println("ar3:ready2Drive");
+                //todo tell motor controller ready 2 drive
                 ready2Drive = true;
                 startupSequence = 0;//Reset the startup sequence
                 eepromChecked = false;
@@ -370,13 +394,6 @@ void shutdownHard(int errCode) {
     }
     if (errCode == 2) {
         EEPROM.write(0,2);
-    }
-    if (errCode == 3) {
-        if (true) {
-            //todo if init switch in neutral position then throw no error
-        } else {
-            EEPROM.write(0,3);
-        }
     }
     Serial.print(millis());
     Serial.print(" - Shutting down - ");
