@@ -55,8 +55,8 @@ boolean brakePlausActive = false;//Set to true if brakes actuated && torque enco
 END CONFIGURATION
 *************************************/
 
-String inputCmd1 = "";
-String inputCmd2 = "";
+String inputCmdStream1 = "";
+String inputCmdStream2 = "";
 boolean stringComplete1 = false;
 boolean stringComplete2 = false;
 unsigned long timeoutRx1;//Stores millisecond value to shut off if communication is lost
@@ -143,6 +143,14 @@ void loop() {
     }
 
     if (stringComplete1) {//Recieved something from ar1
+        int newLineIndex = inputCmdStream1.indexOf('/n');
+        if (newLineIndex > -1) {
+            String inputCmd1 = inputCmdStream1.substring(0,newLineIndex);
+            inputCmdStream1 = inputCmdStream1.substring(newLineIndex + 1);
+        } else {
+            String inputCmd1 = inputCmdStream1;
+            stringComplete1 = false;
+        }
         if (inputCmd1.substring(0,11) == "ar2:restart") {
             //Restarting vehicle
             reset();
@@ -163,11 +171,17 @@ void loop() {
         }else if (inputCmd1 == "ar2:amsBmsFaultLed:0") {
             digitalWrite(ledPinAmsBmsFault, LOW);
         }
-        inputCmd1 = "";
-        stringComplete1 = false;
     }
 
     if (stringComplete2) {//Received something from ar3
+        int newLineIndex = inputCmdStream2.indexOf('/n');
+        if (newLineIndex > -1) {
+            String inputCmd2 = inputCmdStream2.substring(0,newLineIndex);
+            inputCmdStream2 = inputCmdStream2.substring(newLineIndex + 1);
+        } else {
+            String inputCmd2 = inputCmdStream2;
+            stringComplete2 = false;
+        }
         if (inputCmd2.substring(0,4) == "ar1:") {
             Serial1.println(inputCmd2);
         }else if (inputCmd2 == "ar2:accelImplaus:1") {
@@ -179,8 +193,6 @@ void loop() {
         }else if (inputCmd2 == "ar2:brakePlaus:0") {
             //todo remove error from screen?
         }
-        inputCmd2 = "";
-        stringComplete2 = false;
     }
 
     if (runLoop < millis()) {//Runs whether or not car is ready to drive
@@ -315,7 +327,7 @@ void SerialEvent1() {
             stringComplete1 = true;
             timeoutRx1 = millis() + 1000; //Number of milliseconds since program started, plus 1000, used to timeout if no complete command received for 1 second
         }else {
-            inputCmd1 += newChar;
+            inputCmdStream1 += newChar;
         }
     }
 }
@@ -327,7 +339,7 @@ void SerialEvent2() {
             stringComplete2 = true;
             timeoutRx2 = millis() + 1000; //Number of milliseconds since program started, plus 1000, used to timeout if no complete command received for 1 second
         }else {
-            inputCmd2 += newChar;
+            inputCmdStream2 += newChar;
         }
     }
 }

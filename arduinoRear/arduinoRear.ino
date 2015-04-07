@@ -53,9 +53,9 @@ unsigned long AmpsOutReading;
 END CONFIGURATION
 *************************************/
 
-String inputCmd1 = "";
-String inputCmd2 = "";
-String inputCmd3 = "";
+String inputCmdStream1 = "";
+String inputCmdStream2 = "";
+String inputCmdStream3 = "";
 boolean stringComplete1 = false;
 boolean stringComplete2 = false;
 boolean stringComplete3 = false;
@@ -121,29 +121,34 @@ void loop() {
     Commands that run whether or not car is ready to drive
     *************************************/
     if (stringComplete1) {//Received command from AR2
-        if (inputCmd2 == "ar1:restart") {
+        int newLineIndex = inputCmdStream1.indexOf('/n');
+        if (newLineIndex > -1) {
+            String inputCmd1 = inputCmdStream1.substring(0,newLineIndex);
+            inputCmdStream1 = inputCmdStream1.substring(newLineIndex + 1);
+        } else {
+            String inputCmd1 = inputCmdStream1;
+            stringComplete1 = false;
+        }
+        if (inputCmd1 == "ar1:restart") {
             shutdownHard(0);
-        } else if (inputCmd2.substring(0,10) == "ar1:print:") {
+        } else if (inputCmd1.substring(0,10) == "ar1:print:") {
             Serial.print(millis());
             Serial.print(" - ");
-            Serial.println(inputCmd2.substring(10));//todo make sure this works
-        } else if (inputCmd2.substring(0,17) == "ar1:dashSwitches:") {
-            char switchRead = inputCmd2.charAt(17);
+            Serial.println(inputCmd1.substring(10));//todo make sure this works
+        } else if (inputCmd1.substring(0,17) == "ar1:dashSwitches:") {
+            char switchRead = inputCmd1.charAt(17);
             dashSwitch1Val = switchRead - '0';//todo make sure char to int conversion works
-            char switchRead = inputCmd2.charAt(18);
+            char switchRead = inputCmd1.charAt(18);
             dashSwitch2Val = switchRead - '0';
-            char switchRead = inputCmd2.charAt(19);
+            char switchRead = inputCmd1.charAt(19);
             dashSwitch3Val = switchRead - '0';
-            char switchRead = inputCmd2.charAt(20);
+            char switchRead = inputCmd1.charAt(20);
             dashSwitch4Val = switchRead - '0';
-        }else if (inputCmd2 == "ar1:brake:1") {
+        }else if (inputCmd1 == "ar1:brake:1") {
             digitalWrite(digitalBrake, HIGH);
-        } else if (inputCmd2 == "ar1:brake:0") {
+        } else if (inputCmd1 == "ar1:brake:0") {
             digitalWrite(digitalBrake, LOW);
         }
-
-    inputCmd2 = "";
-    stringComplete1 = false;
     }
     /*************************************
     End commands
@@ -338,7 +343,7 @@ void serialEvent1() {//Receives commands from ar2
             timeoutRx1 = millis() + 1000; //Number of milliseconds since program started, plus 1000, used to timeout if no complete command received for 1 second
             Serial.println("recvd ar2: "+inputCmd1);
         }else {
-            inputCmd1 += newChar;
+            inputCmdStream1 += newChar;
         }
     }
 }
@@ -351,7 +356,7 @@ void serialEvent2() {//Receives commands from ar4
             timeoutRx2 = millis() + 1000; //Number of milliseconds since program started, plus 1000, used to timeout if no complete command received for 1 second
             Serial.println("recvd ar4: "+inputCmd2);
         }else {
-            inputCmd2 += newChar;
+            inputCmdStream2 += newChar;
         }
     }
 }
@@ -364,7 +369,7 @@ void serialEvent3() {//Receives commands from ar5
             timeoutRx3 = millis() + 1000; //Number of milliseconds since program started, plus 1000, used to timeout if no complete command received for 1 second
             Serial.println("recvd ar5: "+inputCmd3);
         } else {
-            inputCmd3 += newChar;
+            inputCmdStream3 += newChar;
         }
     }
 }
