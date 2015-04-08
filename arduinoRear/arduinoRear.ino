@@ -22,12 +22,7 @@ int digitalReady2DriveSound = 29;
 int analogImdFaultReset = 0;
 int analogBmsFaultReset = 1;
 int analogMotorCtrlTemp = 2;
-int analogWaterTemp = 3;
-int analogPumpStatus = 5;
-int analogCheckInertia = 6;
-int analogCheckCockpit = 7;
-int analogCheckBots = 8;
-int analogCheckTsms = 9;
+int analogCheckShutdownButtons = 9;
 int analogCheckDcDc = 10;
 int Bms_SOC = 11;
     int Bms_SOC_Val = 0;
@@ -264,14 +259,26 @@ void loop() {
 
     else {//No eeprom errors
         if (stringComplete2) {//Received command from ar4
+            int newLineIndex = inputCmdStream2.indexOf('/n');
+            if (newLineIndex > -1) {
+                String inputCmd2 = inputCmdStream2.substring(0,newLineIndex);
+                inputCmdStream2 = inputCmdStream2.substring(newLineIndex + 1);
+            } else {
+                String inputCmd1 = inputCmdStream1;
+                stringComplete1 = false;
+            }
             //Put stuff here
-            inputCmd2 = "";
-            stringComplete2 = false;
         }
         if (stringComplete3) {//Received command from ar5
+            int newLineIndex = inputCmdStream3.indexOf('/n');
+            if (newLineIndex > -1) {
+                String inputCmd3 = inputCmdStream3.substring(0,newLineIndex);
+                inputCmdStream3 = inputCmdStream3.substring(newLineIndex + 1);
+            } else {
+                String inputCmd1 = inputCmdStream1;
+                stringComplete1 = false;
+            }
             //Put stuff here
-            inputCmd3 = "";
-            stringComplete3 = false;
         }
         if (runLoop < millis()) {//Runs 10x per second
             runLoop = millis() + 100;//Push runLoop up 100 ms
