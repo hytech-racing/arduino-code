@@ -65,14 +65,8 @@ unsigned long runLoop;//Stores millisecond value to run main loop every so often
 
 int cycleDisplay = 1;//Stores which view to send to LCD
 
-float torqueVal;//0-1000 mapped value for torque
-float torqueValAdjusted;//Adjusted exponentially
-
 int rpmVal = 0; // not sure if we will read in the values for RPM or not
 
-boolean regenActive = false;
-
-boolean brakePlausActive = false;//Set to true if brakes actuated && torque encoder > 25%
 boolean ready2Drive = false;//Set to false on startup and soft restart
 int dashSwitch1Val = -1;
 int dashSwitch2Val = -1;
@@ -272,14 +266,14 @@ void loop() {
             Serial.println("ar1:print:Brake lights off");
         }
 
-        if (potAccDiff > 200) {//Acceleration error check (Die if 20%+ difference between readings)
+        if (potAccAdjDiff > 200) {//Acceleration error check (Die if 20%+ difference between readings)
             //todo error checking which can detect open circuit, short to ground and short to sensor power
             //todo does this need to shut down car or just send 0 torque val?
             //todo put error on screen
-            Serial.println("ar1:print:Acceleration Implausibility on")
+            Serial.println("ar1:print:Acceleration Implausibility on");
         } else {
             //todo remove error from screen
-            Serial.println("ar1:print:Acceleration Implausibility off")
+            Serial.println("ar1:print:Acceleration Implausibility off");
             if (pot3ValAdjusted > 0 && torqueVal >= 250) {//If brake pressed and torque pressed over 25%
                 brakePlausActive = true;
                 //todo put error on screen
