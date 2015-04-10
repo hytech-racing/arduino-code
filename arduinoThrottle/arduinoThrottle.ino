@@ -10,7 +10,7 @@ Use: Read and process pedal values
 int pot1 = 0;
 int pot2 = 1;
 int pot3 = 2;//Pot3 used for brake
-int pwmTorque = 10;
+int pwmTorque = 5;
 
 //todo change these values to actual values once installed
 /*
@@ -19,12 +19,12 @@ every time the loop runs
 Extended = more resistance, Pedal compresses pot when pressed, therefore higher voltage reading corresponds to higher torque
 */
 //Pot1 and Pot2 used for acceleration
-int pot1High = 650;//Pedal pressed
-int pot1Low = 275;//Pedal resting//todo right now the low vals are when a little pressure is applied
-int pot2High = 650;
-int pot2Low = 275;
-int pot3High = 689;//Pot3 used for brake
-int pot3Low = 210;
+int pot1High = 376;//Pedal pressed
+int pot1Low = 147;//Pedal resting//todo right now the low vals are when a little pressure is applied
+int pot2High = 462;
+int pot2Low = 226;
+int pot3High = 468;//Pot3 used for brake
+int pot3Low = 336;
 
 float pot1ValAdjusted;
 float pot2ValAdjusted;
@@ -40,8 +40,7 @@ float torqueValAdjusted;//0-255 adjusted exponentially
 boolean brakePlausActive = false;//Set to true if brakes actuated && torque encoder > 25%
 
 void setup() {
-  runLoop = 0;
-  timeoutRx = 1000;
+    pinMode(pwmTorque, OUTPUT);
 }
 
 void loop() {
@@ -78,7 +77,7 @@ void loop() {
         torqueValAdjusted = 255;
     }
 
-    if (potAccDiff > 200) {//Acceleration error check (Die if 20%+ difference between readings)
+    if (potAccAdjDiff > 300) {//Acceleration error check (Die if 30%+ difference between adjusted values)
         analogWrite(pwmTorque, 0);
     } else {
         if (pot3ValAdjusted > 0 && torqueVal >= 250) {//If brake pressed and torque pressed over 25%

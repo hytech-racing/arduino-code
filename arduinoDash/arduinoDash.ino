@@ -34,12 +34,12 @@ int analogSwitch4b = 34;
 int pot1 = 0;//Pot1 and Pot2 used for acceleration
 int pot2 = 1;
 int pot3 = 2;//Pot3 used for brake
-int pot1High = 650;//Pedal pressed
-int pot1Low = 275;//Pedal resting//todo right now the low vals are when a little pressure is applied
-int pot2High = 650;
-int pot2Low = 275;
-int pot3High = 689;//Pot3 used for brake
-int pot3Low = 210;
+int pot1High = 376;//Pedal pressed
+int pot1Low = 147;//Pedal resting//todo right now the low vals are when a little pressure is applied
+int pot2High = 462;
+int pot2Low = 226;
+int pot3High = 468;//Pot3 used for brake
+int pot3Low = 336;
 float pot1ValAdjusted;
 float pot2ValAdjusted;
 float pot3ValAdjusted;
