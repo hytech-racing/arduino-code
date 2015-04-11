@@ -22,6 +22,9 @@ int oldCtcleDisplay = 0; // so we know if there is a change in cycle display
 int ledPinWaterPumpAlert = 11;
 int ledPinImdFault = 12;
 int ledPinAmsBmsFault = 13;
+int ledPinStartup1 = 14;
+int ledPinStartup2 = 15;
+int ledPinStartup3 = 16;
 int analogCycleDisplay = 8;
 int analogSwitch1a = 22;
 int analogSwitch1b = 24;
@@ -40,6 +43,10 @@ int pot2High = 462;
 int pot2Low = 226;
 int pot3High = 468;//Pot3 used for brake
 int pot3Low = 336;
+/*************************************
+END CONFIGURATION
+*************************************/
+
 float pot1ValAdjusted;
 float pot2ValAdjusted;
 float pot3ValAdjusted;
@@ -51,9 +58,6 @@ float torqueVal;//0-1000 mapped value for torque
 float torqueValAdjusted;//0-255 adjusted exponentially
 boolean brakePlausActive = false;//Set to true if brakes actuated && torque encoder > 25%
 
-/*************************************
-END CONFIGURATION
-*************************************/
 
 String inputCmdStream1 = "";
 String inputCmdStream2 = "";
@@ -82,6 +86,9 @@ void setup() {
     pinMode(ledPinWaterPumpAlert, OUTPUT);
     pinMode(ledPinImdFault, OUTPUT);
     pinMode(ledPinAmsBmsFault, OUTPUT);
+    pinMode(ledPinStartup1, OUTPUT);
+    pinMode(ledPinStartup2, OUTPUT);
+    pinMode(ledPinStartup3, OUTPUT);
     //Wait 1 second for communication before throwing error
     timeoutRx1 = 1000;
     timeoutRx2 = 1000;
@@ -164,28 +171,18 @@ void loop() {
             digitalWrite(ledPinAmsBmsFault, HIGH);
         }else if (inputCmd1 == "ar2:amsBmsFaultLed:0") {
             digitalWrite(ledPinAmsBmsFault, LOW);
-        }
-    }
-
-    if (stringComplete2) {//Received something from ar3
-        int newLineIndex = inputCmdStream2.indexOf('/n');
-        if (newLineIndex > -1) {
-            String inputCmd2 = inputCmdStream2.substring(0,newLineIndex);
-            inputCmdStream2 = inputCmdStream2.substring(newLineIndex + 1);
-        } else {
-            String inputCmd2 = inputCmdStream2;
-            stringComplete2 = false;
-        }
-        if (inputCmd2.substring(0,4) == "ar1:") {
-            Serial1.println(inputCmd2);
-        }else if (inputCmd2 == "ar2:accelImplaus:1") {
-            //todo put error on screen?
-        }else if (inputCmd2 == "ar2:accelImplaus:0") {
-            //todo remove error from screen?
-        }else if (inputCmd2 == "ar2:brakePlaus:1") {
-            //todo put error on screen?
-        }else if (inputCmd2 == "ar2:brakePlaus:0") {
-            //todo remove error from screen?
+        }else if (inputCmd1 == "ar2:startupLed1:1") {
+            digitalWrite(ledPinStartup1, HIGH);
+        }else if (inputCmd1 == "ar2:startupLed1:0") {
+            digitalWrite(ledPinStartup1, LOW);
+        }else if (inputCmd1 == "ar2:startupLed2:1") {
+            digitalWrite(ledPinStartup2, HIGH);
+        }else if (inputCmd1 == "ar2:startupLed2:0") {
+            digitalWrite(ledPinStartup2, LOW);
+        }else if (inputCmd1 == "ar2:startupLed3:1") {
+            digitalWrite(ledPinStartup3, HIGH);
+        }else if (inputCmd1 == "ar2:startupLed3:0") {
+            digitalWrite(ledPinStartup3, LOW);
         }
     }
 
@@ -214,97 +211,14 @@ void loop() {
             tft.setCursor(298, 160);
             tft.print(rpmVal); // if we ever get an rpm value
         }
-
-        /******************************
-        Throttle reading code
-        ******************************/
-        //Read analog values all at once
-        pot1ValAdjusted = analogRead(pot1);
-        pot2ValAdjusted = analogRead(pot2);
-        pot3ValAdjusted = analogRead(pot3);
-
-        if (pot1ValAdjusted > 1000 || pot1ValAdjusted < 10 || pot2ValAdjusted > 1000 || pot2ValAdjusted < 10) {
-            Serial1.println("ar1:restart");
-            Serial1.println("ar1:print:Throttle encoder short detected");
-        }
-
-        //Now calculate remapped values
-        pot1ValAdjusted = pot1ValAdjusted - pot1Low;
-        pot1ValAdjusted = pot1ValAdjusted * 1000;
-        pot1ValAdjusted = pot1ValAdjusted / pot1Range;//new mapped value from 0-1000
-
-        pot2ValAdjusted = pot2ValAdjusted - pot2Low;
-        pot2ValAdjusted = pot2ValAdjusted * 1000;
-        pot2ValAdjusted = pot2ValAdjusted / pot2Range;
-
-        pot3ValAdjusted = pot3ValAdjusted - pot3Low;
-        pot3ValAdjusted = pot3ValAdjusted * 1000;
-        pot3ValAdjusted = pot3ValAdjusted / pot3Range;
-
-        potAccAdjDiff = abs(pot1ValAdjusted-pot2ValAdjusted);//Get difference between torque sensors
-        if (pot2ValAdjusted > pot1ValAdjusted) {//Torque is lowest of two torque sensors
-            torqueVal = pot1ValAdjusted;
-        } else {
-            torqueVal = pot2ValAdjusted;
-        }
-        if (torqueVal < 0) {
-            torqueValAdjusted = 0;
-        } else {
-            torqueValAdjusted = 255 * pow((torqueVal/1000), 2);
-        }
-        if (torqueValAdjusted > 255) {
-            torqueValAdjusted = 255;
-        }
-        Serial.print("ar1:print:Throttle value ");
-        Serial.println(torqueValAdjusted);//Prints torque value to computer
-
-        if (pot3ValAdjusted > 0) { //Brake light
-            Serial.println("ar1:brake:1");
-            Serial.println("ar1:print:Brake lights on");
-        } else {
-            Serial.println("ar1:brake:0");
-            Serial.println("ar1:print:Brake lights off");
-        }
-
-        if (potAccAdjDiff > 200) {//Acceleration error check (Die if 20%+ difference between readings)
-            //todo error checking which can detect open circuit, short to ground and short to sensor power
-            //todo does this need to shut down car or just send 0 torque val?
-            //todo put error on screen
-            Serial.println("ar1:print:Acceleration Implausibility on");
-        } else {
-            //todo remove error from screen
-            Serial.println("ar1:print:Acceleration Implausibility off");
-            if (pot3ValAdjusted > 0 && torqueVal >= 250) {//If brake pressed and torque pressed over 25%
-                brakePlausActive = true;
-                //todo put error on screen
-                //todo put 0 throttle on screen
-                Serial.println("ar1:print:Brake plausibility on");
-            } else {
-                if (brakePlausActive && torqueVal < 50) {//Motor deactivated but torque less than 5% (required before disabling brake plausibility)
-                    brakePlausActive = false;
-                    //todo remove error from screen
-                    Serial.println("ar1:print:Brake plausibility off");
-                }
-                if (!brakePlausActive) {//If brake plausibility is not active
-                    //todo put throttle on screen
-                } else {//If brake plausibility is active
-                    //todo put 0 throttle on screen
-                }
-            }
-        }
     }
 }
 
 void serialTimeout() {
-    if (timeoutRx1 < millis() || timeoutRx2 < millis()) {//If 1 second has passed since receiving a complete command from both Arduinos reset ***SOMETHING HAS GONE WRONG***
+    if (timeoutRx1 < millis()) {//If 1 second has passed since receiving a complete command from main Arduino reset ***SOMETHING HAS GONE WRONG***
         Serial.print("ar1:print:");
         Serial.println(millis());
-        if(timeoutRx1 < millis()) {
-            Serial1.println("ar2 lost connection to ar1");
-        }
-        if(timeoutRx2 < millis()) {
-            Serial1.println("ar2 lost connection to ar3");
-        }
+        Serial1.println("ar1:print:ar2 lost connection to ar1");
         Serial1.println("ar1:restart");
         reset();
 
@@ -322,18 +236,6 @@ void SerialEvent1() {
             timeoutRx1 = millis() + 1000; //Number of milliseconds since program started, plus 1000, used to timeout if no complete command received for 1 second
         }else {
             inputCmdStream1 += newChar;
-        }
-    }
-}
-
-void SerialEvent2() {
-    while (Serial2.available()) {
-        char newChar = (char)Serial2.read();
-        if (newChar == '\n') {//NOTE: inputCmd2 does NOT include \n
-            stringComplete2 = true;
-            timeoutRx2 = millis() + 1000; //Number of milliseconds since program started, plus 1000, used to timeout if no complete command received for 1 second
-        }else {
-            inputCmdStream2 += newChar;
         }
     }
 }
@@ -365,4 +267,7 @@ void reset() {
     digitalWrite(ledPinWaterPumpAlert, LOW);
     digitalWrite(ledPinImdFault, LOW);
     digitalWrite(ledPinAmsBmsFault, LOW);
+    digitalWrite(ledPinStartup1, LOW);
+    digitalWrite(ledPinStartup2, LOW);
+    digitalWrite(ledPinStartup3, LOW);
 }
