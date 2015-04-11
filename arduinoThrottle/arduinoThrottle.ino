@@ -76,13 +76,53 @@ void loop() {
     if (torqueValAdjusted > 255) {
         torqueValAdjusted = 255;
     }
-
+    //***potentiometer does not scale linearly with PWM duty cycle, so prepare for annoying conversion algorithm***
+    if(torqueValAdjusted > 209) {
+      torqueValAdjusted = map(torqueValAdjusted, 210, 255, 20, 0);
+    }
+    else if(torqueValAdjusted > 175) {
+      torqueValAdjusted = map(torqueValAdjusted, 176, 209, 40, 20);
+    }
+    else if(torqueValAdjusted > 147) {
+      torqueValAdjusted = map(torqueValAdjusted, 148, 175, 60, 40);
+    }
+    else if(torqueValAdjusted > 122) {
+      torqueValAdjusted = map(torqueValAdjusted, 123, 147, 80, 60);
+    }
+    else if(torqueValAdjusted > 102) {
+      torqueValAdjusted = map(torqueValAdjusted, 103, 122, 100, 80);
+    }
+    else if(torqueValAdjusted > 84) {
+      torqueValAdjusted = map(torqueValAdjusted, 85, 102, 120, 100);
+    }
+    else if(torqueValAdjusted > 68) {
+      torqueValAdjusted = map(torqueValAdjusted, 69, 84, 140, 120);
+    }
+    else if(torqueValAdjusted > 53) {
+      torqueValAdjusted = map(torqueValAdjusted, 54, 68, 160, 140);
+    }
+    else if(torqueValAdjusted > 40) {
+      torqueValAdjusted = map(torqueValAdjusted, 41, 53, 180, 160);
+    }
+    else if(torqueValAdjusted > 28) {
+      torqueValAdjusted = map(torqueValAdjusted, 29, 40, 200, 180);
+    }
+    else if(torqueValAdjusted > 17) {
+      torqueValAdjusted = map(torqueValAdjusted, 18, 28, 220, 200);
+    }
+    else if(torqueValAdjusted > 8) {
+      torqueValAdjusted = map(torqueValAdjusted, 9, 17, 240, 220);
+    }
+    else {
+      torqueValAdjusted = map(torqueValAdjusted, 0, 8, 255, 240);
+    }
+    //***that was fun, wasn't it?***
     if (potAccAdjDiff > 300) {//Acceleration error check (Die if 30%+ difference between adjusted values)
-        analogWrite(pwmTorque, 0);
+        analogWrite(pwmTorque, 255);// ALSO FOR SOME WEIRD REASON THE POT OUTPUTS ZERO WITH A PULSE OF 255, NOT 0 o.O
     } else {
         if (pot3ValAdjusted > 0 && torqueVal >= 250) {//If brake pressed and torque pressed over 25%
             brakePlausActive = true;
-            analogWrite(pwmTorque, 0);
+            analogWrite(pwmTorque, 255);// ALSO FOR SOME WEIRD REASON THE POT OUTPUTS ZERO WITH A PULSE OF 255, NOT 0 o.O
         } else {
             if (brakePlausActive && torqueVal < 50) {//Motor deactivated but torque less than 5% (required before disabling brake plausibility)
                 brakePlausActive = false;
@@ -90,7 +130,7 @@ void loop() {
             if (!brakePlausActive) {//If brake plausibility is not active
                 analogWrite(pwmTorque, torqueValAdjusted);
             } else {//If brake plausibility is active
-                analogWrite(pwmTorque, 0);
+                analogWrite(pwmTorque, 255);// ALSO FOR SOME WEIRD REASON THE POT OUTPUTS ZERO WITH A PULSE OF 255, NOT 0 o.O
             }
         }
     }
