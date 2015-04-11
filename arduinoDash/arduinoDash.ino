@@ -60,11 +60,9 @@ boolean brakePlausActive = false;//Set to true if brakes actuated && torque enco
 
 
 String inputCmdStream1 = "";
-String inputCmdStream2 = "";
 boolean stringComplete1 = false;
-boolean stringComplete2 = false;
+String inputCmd1;
 unsigned long timeoutRx1;//Stores millisecond value to shut off if communication is lost
-unsigned long timeoutRx2;
 unsigned long runLoop;//Stores millisecond value to run main loop every so often (instead of using delay)
 
 int cycleDisplay = 1;//Stores which view to send to LCD
@@ -80,9 +78,7 @@ boolean sendSwitchValsThisLoop = false;
 
 void setup() {
     Serial1.begin(115200);//Talk to ar1
-    Serial2.begin(115200);//Talk to ar3
-    inputCmd1.reserve(50);
-    inputCmd2.reserve(50);
+    inputCmdStream1.reserve(50);
     pinMode(ledPinWaterPumpAlert, OUTPUT);
     pinMode(ledPinImdFault, OUTPUT);
     pinMode(ledPinAmsBmsFault, OUTPUT);
@@ -91,7 +87,6 @@ void setup() {
     pinMode(ledPinStartup3, OUTPUT);
     //Wait 1 second for communication before throwing error
     timeoutRx1 = 1000;
-    timeoutRx2 = 1000;
     runLoop = 0;
     initScreen(); // function defined below
 }
@@ -146,10 +141,10 @@ void loop() {
     if (stringComplete1) {//Recieved something from ar1
         int newLineIndex = inputCmdStream1.indexOf('/n');
         if (newLineIndex > -1) {
-            String inputCmd1 = inputCmdStream1.substring(0,newLineIndex);
+            inputCmd1 = inputCmdStream1.substring(0,newLineIndex);
             inputCmdStream1 = inputCmdStream1.substring(newLineIndex + 1);
         } else {
-            String inputCmd1 = inputCmdStream1;
+            inputCmd1 = inputCmdStream1;
             stringComplete1 = false;
         }
         if (inputCmd1.substring(0,11) == "ar2:restart") {
