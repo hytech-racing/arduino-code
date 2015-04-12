@@ -9,39 +9,37 @@ BEGIN CONFIGURATION
 *************************************/
 #include <EEPROM.h>;
 
-int digitalRelay1 = 2;
-int digitalRelay2 = 3;
-int digitalRelay3 = 4;
-int digitalRelay4 = 5;
-int digitalRelay5 = 6;
-int digitalRelay6 = 7;
-int digitalRelay7 = 8;
-int digitalReady2DriveSound = 9; //Relay 8
-int digitalImd = 32; // PWM read pin
-int digitalTransistor4 = 46;
-int digitalBrake = 48; //transistor3
-int digitalTransistor2 = 50;
-int digitalPumpFan = 52; //transistor1
-int analogHSOK = 7;
-int analogAmbientTemp = 8; //todo
-int analogDCDCTemp = 9; //todo
-int analogImdBmsFaultReset = 11;
-int analogThermistor1 = 12;
-int analogThermistor2 = 13;
-int analogThermistor3 = 14;
-int analogMotorCtrlTemp; //todo find pin number
-int analogCheckShutdownButtons; //todo find pin number
-int analogCheckDcDc; //todo find pin number
-int Bms_SOC = 3;//todo bms pins might be mixed up
+int digitalRelay1 = 53;
+int digitalRelay2 = 51;
+int digitalRelay3 = 49;
+int digitalRelay4 = 47;
+int digitalRelay5 = 45;
+int digitalRelay6 = 41;
+int digitalImd1 = 2; // HSOK pin
+int digitalImd2 = 3; // PWM read pin
+int digitalBrake = 31;
+int digitalReady2DriveSound = 29;
+int digitalPumpFan = 30;
+int analogImdFaultReset = 0;
+int analogBmsFaultReset = 1;
+int analogMotorCtrlTemp = 2;
+int analogCheckShutdownButtons = 9;
+int analogCheckDcDc = 10;
+int Bms_SOC = 11;
     int Bms_SOC_Val = 0;
-int Bms_Amps = 4;
+int Bms_Amps = 12;
     int Bms_Amps_Val = 0;
     int Bms_Amps_Actual = 0;
     int Bms_Allowed_Current = 0;
-int Bms_DCL = 5;
+int Bms_DCL = 13;
     int Bms_DCL_Val = 0;
+int analogBms4 = 14;
+int analogBms5 = 15;
 
 /**Added by Nathan C to force it to compile*/
+int analogBms1 = 0;
+int analogBms2 = 0;
+int analogBms3 = 0;
 unsigned long highPulse;
 unsigned long lowPulse;
 unsigned long totalPulse;
@@ -96,7 +94,6 @@ int dashSwitch1Val = -1;
 int dashSwitch2Val = -1;
 int dashSwitch3Val = -1;
 int dashSwitch4Val = -1;
-int newLineIndex;
 
 void setup() {
     Serial.begin(115200);//Talk back to computer
@@ -113,13 +110,21 @@ void setup() {
     pinMode(digitalRelay4, OUTPUT);
     pinMode(digitalRelay5, OUTPUT);
     pinMode(digitalRelay6, OUTPUT);
-    pinMode(digitalRelay7, OUTPUT);
-    pinMode(digitalReady2DriveSound, OUTPUT);
-    pinMode(digitalImd, OUTPUT);//todo output or input?
-    pinMode(digitalTransistor4, OUTPUT);
+    pinMode(digitalImd1, OUTPUT);
     pinMode(digitalBrake, OUTPUT);
-    pinMode(digitalTransistor2, OUTPUT);
+    pinMode(digitalReady2DriveSound, OUTPUT);
     pinMode(digitalPumpFan, OUTPUT);
+    //Initialize input pins
+    pinMode(analogImdFaultReset, INPUT);
+    pinMode(analogBmsFaultReset, INPUT);
+    pinMode(analogMotorCtrlTemp, INPUT);
+    pinMode(analogCheckShutdownButtons, INPUT);
+    pinMode(analogCheckDcDc, INPUT);
+    pinMode(analogBms1, INPUT);
+    pinMode(analogBms2, INPUT);
+    pinMode(analogBms3, INPUT);
+    pinMode(analogBms4, INPUT);
+    pinMode(analogBms5, INPUT);
 
     digitalWrite(digitalPumpFan, HIGH);//Turn on cooling fan
 
@@ -134,8 +139,8 @@ void loop() {
     if (!ready2Drive) {
         if (!eepromChecked) {//Runs on startup and after high voltage shutdowns
             //Check if EEPROM error code was set
-            eepromErrCode = EEPROM.read(10);
-            if (eepromErrCode == 255){
+            eepromErrCode = EEPROM.read(0);
+            if (eepromErrCode == 255){//todo make sure this is correct blank code
                 eepromCheckGood = true;
             }
             if (eepromErrCode == 1) {
@@ -149,21 +154,23 @@ void loop() {
             eepromChecked = true;
         }
         if (!eepromCheckGood) {//While there is an un reset eeprom error
-            if (analogRead(analogImdBmsFaultReset) > 1000) {
-                EEPROM.write(10,255);//Delete error from EEPROM
+            //todo query BMS and do not start up if there's still an error
+            if (eepromErrCode == 1 && analogRead(analogBmsFaultReset) > 1000) {//If eepromerrcode == 1 (BMS) and button pressed (5 volts reading when closed)
+                EEPROM.write(0,255);//Delete error from EEPROM
                 eepromCheckGood = true;//Exit this loop
-                if (eepromErrCode == 1) {
-                    Serial1.println("ar2:amsBmsFaultLed:0");//Make dash Arduino turn off error light
-                    Serial.println("BMS fault cleared");
-                } else if (eepromErrCode == 2) {
-                    Serial1.println("ar2:imdFaultLed:0");//Make dash Arduino turn off error light
-                    Serial.println("IMD fault cleared");
-                }
+                Serial1.println("ar2:amsBmsFaultLed:0");//Make dash Arduino turn off error light
+                Serial.println("BMS fault cleared");
+            }
+            if (eepromErrCode == 2 && analogRead(analogImdFaultReset) > 1000) {//If eepromerrcode == 2 (IMD) and button pressed (5 volts reading when closed)
+                EEPROM.write(0,255);//Delete error from EEPROM
+                eepromCheckGood = true;//Exit this loop
+                Serial1.println("ar2:imdFaultLed:0");//Make dash Arduino turn off error light
+                Serial.println("IMD fault cleared");
             }
         }
         if (eepromChecked && eepromCheckGood) {//Eeprom check is finished
             if (startupSequence == 0) {
-                if (dashSwitch1Val != -1 && dashSwitch1Val != 1) {//Bypass switch is not neutral
+                if (dashSwitch1Val != 1) {//Bypass switch is not neutral
                     Serial1.println("ar2:initSwitchFault:1");
                     Serial.println("Init switch in improper position");
                 }
@@ -247,16 +254,16 @@ void loop() {
     Commands that run whether or not car is ready to drive
     *************************************/
     if (stringComplete1) {//Received command from AR2
-        newLineIndex = inputCmdStream1.indexOf('\n');
-        if (newLineIndex > -1) {//Newline is found
-            inputCmd1 = inputCmdStream1.substring(0, newLineIndex - 1);
-            inputCmdStream1 = inputCmdStream1.substring(newLineIndex + 2);
-        }
-        if (inputCmdStream1.indexOf('\n') == -1) {//No more complete commands
+        int newLineIndex = inputCmdStream1.indexOf('/n');
+        if (newLineIndex > -1) {
+            inputCmd1 = inputCmdStream1.substring(0,newLineIndex);
+            inputCmdStream1 = inputCmdStream1.substring(newLineIndex + 1);
+        } else {
+            inputCmd1 = inputCmdStream1;
             stringComplete1 = false;
         }
         if (inputCmd1 == "ar1:restart") {
-            reset(13);
+            reset(0);
         } else if (inputCmd1.substring(0,10) == "ar1:print:") {
             Serial.print(millis());
             Serial.print(" - ");
@@ -270,7 +277,7 @@ void loop() {
             dashSwitch3Val = switchRead - '0';
             switchRead = inputCmd1.charAt(20);
             dashSwitch4Val = switchRead - '0';
-        } else if (inputCmd1 == "ar1:brake:1") {
+        }else if (inputCmd1 == "ar1:brake:1") {
             digitalWrite(digitalBrake, HIGH);
         } else if (inputCmd1 == "ar1:brake:0") {
             digitalWrite(digitalBrake, LOW);
@@ -278,24 +285,24 @@ void loop() {
     }
 
     if (stringComplete2) {//Received command from ar4
-        newLineIndex = inputCmdStream2.indexOf('\n');
-        if (newLineIndex > -1) {//Newline is found
-            inputCmd2 = inputCmdStream2.substring(0, newLineIndex - 1);
-            inputCmdStream2 = inputCmdStream2.substring(newLineIndex + 2);
-        }
-        if (inputCmdStream2.indexOf('\n') == -1) {//No more complete commands
-            stringComplete2 = false;
+        int newLineIndex = inputCmdStream2.indexOf('/n');
+        if (newLineIndex > -1) {
+            inputCmd2 = inputCmdStream2.substring(0,newLineIndex);
+            inputCmdStream2 = inputCmdStream2.substring(newLineIndex + 1);
+        } else {
+            inputCmd1 = inputCmdStream1;
+            stringComplete1 = false;
         }
         //Put stuff here
     }
     if (stringComplete3) {//Received command from ar5
-        newLineIndex = inputCmdStream3.indexOf('\n');
-        if (newLineIndex > -1) {//Newline is found
-            inputCmd3 = inputCmdStream3.substring(0, newLineIndex - 1);
-            inputCmdStream3 = inputCmdStream3.substring(newLineIndex + 2);
-        }
-        if (inputCmdStream3.indexOf('\n') == -1) {//No more complete commands
-            stringComplete3 = false;
+        int newLineIndex = inputCmdStream3.indexOf('/n');
+        if (newLineIndex > -1) {
+            inputCmd3 = inputCmdStream3.substring(0,newLineIndex);
+            inputCmdStream3 = inputCmdStream3.substring(newLineIndex + 1);
+        } else {
+            inputCmd1 = inputCmdStream1;
+            stringComplete1 = false;
         }
         //Put stuff here
     }
@@ -306,18 +313,21 @@ void loop() {
 
         //todo read motor/controller/water temp - pins A2-A3
         //todo write error code if emergency buttons pressed? - pins A6-A10
+        //todo SOMETHING with bms????? - pins A11-A14
+        //todo read BMS charge "charge/discharge enable" ground conn - pin A15
 
         //todo BMS shutdown
+        reset(2);
         ////////////////////////////////////////////////////////////////////// READ IMD
-        if (analogRead(analogHSOK) > 512){
-            highPulse = pulseIn(digitalImd, HIGH, 1500000);
-            lowPulse = pulseIn(digitalImd, LOW, 1500000);
+        if (digitalRead(digitalImd1) == HIGH){
+            highPulse = pulseIn(7, HIGH, 1500000);
+            lowPulse = pulseIn(7, LOW, 1500000);
             totalPulse = highPulse + lowPulse;
             if (totalPulse > 200000) {
-               reset(1); // IMD detects a fault
+               reset(1); // BMS detects a fault
             }
             else {
-                reset(4); // IMD gets disconnected from high voltage system
+                reset(4); // BMS gets disconnected from high voltage system
             }
         }
         ///////////////////////////////////////////////////////////////////// READ BMS
@@ -342,7 +352,7 @@ void loop() {
         pot3ValAdjusted = analogRead(pot3);
 
         if (pot1ValAdjusted > 1000 || pot1ValAdjusted < 10 || pot2ValAdjusted > 1000 || pot2ValAdjusted < 10) {
-            reset(11);
+            reset(0);
             Serial.println("Throttle encoder short detected");
         }
 
@@ -385,6 +395,7 @@ void loop() {
         }
 
         if (potAccAdjDiff > 200) {//Acceleration error check (Die if 20%+ difference between readings)
+            //todo error checking which can detect open circuit, short to ground and short to sensor power
             //todo does this need to shut down car or just send 0 torque val?
             //todo put error on screen
             Serial.println("Acceleration Implausibility on");
@@ -440,52 +451,54 @@ void serialTimeout() {
 void serialEvent1() {//Receives commands from ar2
     while (Serial1.available()) {
         char newChar = (char)Serial1.read();
-        if (newChar == '\n') {
+        if (newChar == '\n') {//NOTE: inputCmd1 does NOT include \n
             stringComplete1 = true;
             timeoutRx1 = millis() + 1000; //Number of milliseconds since program started, plus 1000, used to timeout if no complete command received for 1 second
             Serial.println("recvd ar2: "+inputCmd1);
+        }else {
+            inputCmdStream1 += newChar;
         }
-        inputCmdStream1 += newChar;
     }
 }
 
 void serialEvent2() {//Receives commands from ar4. todo: might have problems if receives while using inputCmdStream in arduino loop
     while (Serial2.available()) {
         char newChar = (char)Serial2.read();
-        if (newChar == '\n') {
+        if (newChar == '\n') {//NOTE: inputCmd2 does NOT include \n
             stringComplete2 = true;
             timeoutRx2 = millis() + 1000; //Number of milliseconds since program started, plus 1000, used to timeout if no complete command received for 1 second
             Serial.println("recvd ar4: "+inputCmd2);
+        }else {
+            inputCmdStream2 += newChar;
         }
-        inputCmdStream2 += newChar;
-
     }
 }
 
 void serialEvent3() {//Receives commands from ar5
     while (Serial3.available()) {
         char newChar = (char)Serial3.read();
-        if (newChar == '\n') {
+        if (newChar == '\n') {//NOTE: inputCmd3 does NOT include \n
             stringComplete3 = true;
             timeoutRx3 = millis() + 1000; //Number of milliseconds since program started, plus 1000, used to timeout if no complete command received for 1 second
             Serial.println("recvd ar5: "+inputCmd3);
+        } else {
+            inputCmdStream3 += newChar;
         }
-        inputCmdStream3 += newChar;
-
     }
 }
 
 void reset(int errCode) {
     /*
     Error codes:
-    1. IMD fault
+    1. BMS loss of
+    2. IMD loss of insulation
     3. Cockpit ESB
     4. IMD disconnect from tractive system
     5. Battery less than 10% capacity
+
+    Resetable error codes:
     10. Lost communication
     11. Acceleration implausibility
-    12. BMS current over max allowed
-    13. Received restart from AR2
     */
     //ALL shutdowns
     digitalWrite(digitalRelay1, LOW);
@@ -495,10 +508,10 @@ void reset(int errCode) {
     digitalWrite(digitalRelay6, LOW);//Close discharge AIR
     //BMS shutdown (a work in progress)
     if (errCode == 1) {
-        EEPROM.write(10,1);
+        EEPROM.write(0,1);
     }
     if (errCode == 2) {
-        EEPROM.write(10,2);
+        EEPROM.write(0,2);
     }
     Serial.print(millis());
     Serial.print(" - Shutting down - ");
@@ -509,10 +522,6 @@ void reset(int errCode) {
     startupSequence = 0;//Reset the startup sequence
     eepromChecked = false;
     eepromCheckGood = false;
-    dashSwitch1Val = -1;
-    dashSwitch2Val = -1;
-    dashSwitch3Val = -1;
-    dashSwitch4Val = -1;
 }
 
 /*ALL SHUTDOWNS
@@ -534,3 +543,8 @@ See from voltage divider that cockpit ESB is pressed
 Cut all relays
 if initialize switch is in neutral position then no error
 */
+
+boolean queryBmsError() {//Returns true if error
+  //todo talk to BMS
+  return true;
+}
