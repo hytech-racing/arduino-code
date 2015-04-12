@@ -140,44 +140,46 @@ void loop() {
 
     if (stringComplete1) {//Recieved something from ar1
         int newLineIndex = inputCmdStream1.indexOf('/n');
-        if (newLineIndex > -1) {
-            inputCmd1 = inputCmdStream1.substring(0,newLineIndex);
-            inputCmdStream1 = inputCmdStream1.substring(newLineIndex + 1);
-        } else {
-            inputCmd1 = inputCmdStream1;
+        if (newLineIndex > -1) {//Newline is found
+            inputCmd1 = inputCmdStream1.substring(0, newLineIndex - 1);
+            inputCmdStream1 = inputCmdStream1.substring(newLineIndex + 2);
+        }
+        if (inputCmdStream1.indexOf('\n') == -1) {//No more complete commands
             stringComplete1 = false;
         }
         if (inputCmd1.substring(0,11) == "ar2:restart") {
             //Restarting vehicle
             reset();
-        }else if (inputCmd1.substring(0,4) == "ar3:") {
-            Serial2.println(inputCmd1);
-        }else if (inputCmd1 == "ar2:ready2Drive") {
+        } else if (inputCmd1 == "ar2:ready2Drive") {
             ready2Drive = true;
-        }else if (inputCmd1 == "ar2:waterPumpLed:1") {
+        } else if (inputCmd1 == "ar2:waterPumpLed:1") {
             digitalWrite(ledPinWaterPumpAlert, HIGH);
-        }else if (inputCmd1 == "ar2:waterPumpLed:0") {
+        } else if (inputCmd1 == "ar2:waterPumpLed:0") {
             digitalWrite(ledPinWaterPumpAlert, LOW);
-        }else if (inputCmd1 == "ar2:imdFaultLed:1") {
+        } else if (inputCmd1 == "ar2:imdFaultLed:1") {
             digitalWrite(ledPinImdFault, HIGH);
-        }else if (inputCmd1 == "ar2:imdFaultLed:0") {
+        } else if (inputCmd1 == "ar2:imdFaultLed:0") {
             digitalWrite(ledPinImdFault, LOW);
-        }else if (inputCmd1 == "ar2:amsBmsFaultLed:1") {
+        } else if (inputCmd1 == "ar2:amsBmsFaultLed:1") {
             digitalWrite(ledPinAmsBmsFault, HIGH);
-        }else if (inputCmd1 == "ar2:amsBmsFaultLed:0") {
+        } else if (inputCmd1 == "ar2:amsBmsFaultLed:0") {
             digitalWrite(ledPinAmsBmsFault, LOW);
-        }else if (inputCmd1 == "ar2:startupLed1:1") {
+        } else if (inputCmd1 == "ar2:startupLed1:1") {
             digitalWrite(ledPinStartup1, HIGH);
-        }else if (inputCmd1 == "ar2:startupLed1:0") {
+        } else if (inputCmd1 == "ar2:startupLed1:0") {
             digitalWrite(ledPinStartup1, LOW);
-        }else if (inputCmd1 == "ar2:startupLed2:1") {
+        } else if (inputCmd1 == "ar2:startupLed2:1") {
             digitalWrite(ledPinStartup2, HIGH);
-        }else if (inputCmd1 == "ar2:startupLed2:0") {
+        } else if (inputCmd1 == "ar2:startupLed2:0") {
             digitalWrite(ledPinStartup2, LOW);
-        }else if (inputCmd1 == "ar2:startupLed3:1") {
+        } else if (inputCmd1 == "ar2:startupLed3:1") {
             digitalWrite(ledPinStartup3, HIGH);
-        }else if (inputCmd1 == "ar2:startupLed3:0") {
+        } else if (inputCmd1 == "ar2:startupLed3:0") {
             digitalWrite(ledPinStartup3, LOW);
+        } else if (inputCmd1.substring(0,13) == "ar2:throttle:") {
+            //todo put throttle bar on screen
+        } else if (inputCmd1.substring(0,10) == "ar2:temp1:") {
+            //todo put temperatures on screen
         }
     }
 
@@ -229,7 +231,7 @@ void SerialEvent1() {
         if (newChar == '\n') {//NOTE: inputCmd1 does NOT include \n
             stringComplete1 = true;
             timeoutRx1 = millis() + 1000; //Number of milliseconds since program started, plus 1000, used to timeout if no complete command received for 1 second
-        }else {
+        } else {
             inputCmdStream1 += newChar;
         }
     }
@@ -238,9 +240,9 @@ void SerialEvent1() {
 void initScreen() {
     tft.setRotation(3);
     tft.fillScreen(0xFFFF);
-    tft.setCursor(uint16_t 10, uint16_t 10);
-    tft.setTextColor(uint16_t 0x0000, uint16_t 0xD5A8); // black text on old gold screen
-    tft.setTextSize(uint8_t 6);
+    tft.setCursor(10, 10);
+    tft.setTextColor(0x0000, 0xD5A8); // black text on old gold screen
+    tft.setTextSize(6);
     tft.print("Torque: ");
     tft.setCursor(80, 118);
     tft.print("RPM: ");
