@@ -71,7 +71,6 @@ float pot3Range = pot3High - pot3Low;
 float torqueVal;//0-1000 mapped value for torque
 float torqueValAdjusted;//0-255 adjusted exponentially
 boolean brakePlausActive = false;//Set to true if brakes actuated && torque encoder > 25%
-boolean brakeLightActive = false;
 
 String inputCmdStream1 = "";
 String inputCmdStream2 = "";
@@ -137,6 +136,7 @@ void loop() {
             eepromErrCode = EEPROM.read(10);
             if (eepromErrCode == 255){
                 eepromCheckGood = true;
+                Serial.println("No fault recorded in memory");
             }
             if (eepromErrCode == 1) {
                 Serial1.println("ar2:amsBmsFaultLed:1");//Make dash Arduino turn on error light
@@ -176,6 +176,7 @@ void loop() {
             if (startupSequence == 1) {
                 //Begin startup sequence
                 Serial.println("Waiting to begin startup sequence");
+                Serial.println("Flip IMD bypass switch up")
 
                 if (dashSwitch2Val == 1) {//wait for initialize switch to continue
                     Serial.println("Startup sequence activated");
@@ -188,6 +189,7 @@ void loop() {
                 digitalWrite(digitalRelay3, HIGH);
                 startupSequence = 3;
                 runLoop = millis() + 1000;
+                Serial.println("Closed relays 1,3");
             }
             if (startupSequence == 3 && runLoop < millis()) {//At least 1 second has passed since sequence part 1
                 //Close relays 2, precharge
@@ -195,13 +197,15 @@ void loop() {
                 digitalWrite(digitalRelay5, HIGH);
                 startupSequence = 4;
                 runLoop = millis() + 3000;
+                Serial.println("Closed relays 2, precharge");
             }
             if (startupSequence == 4 && runLoop < millis()) {
                 //todo check voltage behind dcdc converter (tractive active lights)
-                if (false) {
+                if (true) {
                     boolean startupVoltageLedOn = false;
                     if (!startupVoltageLedOn) {
                         Serial1.println("ar2:startupLed3:1");//todo maybe change which LED
+                        Serial.println("Press start button");
                     }
                     if (dashSwitch2Val == 1) {//wait for button press
                         Serial1.println("ar2:startupLed3:0");
@@ -209,12 +213,17 @@ void loop() {
                         digitalWrite(digitalRelay5, LOW);
                         digitalWrite(digitalRelay4, HIGH);
                         startupSequence = 5;
+                        Serial.println("Opened relays discharge,precharge");
+                        Serial.println("Closed relay 4");
+                        Serial.println("Place IMD bypass switch down");
                     }
                 }
             }
             if (startupSequence == 5) {
                 if (dashSwitch1Val == 0) {//wait till init switch is down
                     startupSequence = 6;
+                    Serial.println("IMD switch down");
+                    Serial.println("Press start button to activate tractive system");
                 }
             }
             if (startupSequence == 6) {
@@ -376,12 +385,10 @@ void loop() {
         Serial.print("Throttle value ");
         Serial.println(torqueValAdjusted);//Prints torque value to computer
 
-        if (pot3ValAdjusted > 0 && !brakeLightActive) { //Brake light
-            Serial1.println("ar1:brake:1");
-            Serial.println("Brake lights on");
-        } else if (pot3ValAdjusted <= 0 && brakeLightActive) {
-            Serial1.println("ar1:brake:0");
-            Serial.println("Brake lights off");
+        if (pot3ValAdjusted > 0) { //Brake light
+            digitalWrite(digitalBrake, HIGH);
+        } else if (pot3ValAdjusted <= 0) {
+            digitalWrite(digitalBrake, LOW);
         }
 
         if (potAccAdjDiff > 200) {//Acceleration error check (Die if 20%+ difference between readings)
