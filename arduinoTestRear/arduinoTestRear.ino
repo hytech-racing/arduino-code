@@ -99,12 +99,6 @@ int newLineIndex;
 
 void setup() {
     Serial.begin(115200);//Talk back to computer
-    Serial1.begin(115200);//ar2
-    Serial2.begin(115200);//ar4
-    Serial3.begin(115200);//ar5
-    inputCmdStream1.reserve(50);
-    inputCmdStream2.reserve(50);
-    inputCmdStream3.reserve(50);
     //Initialize output pins
     pinMode(digitalRelay1, OUTPUT);
     pinMode(digitalRelay2, OUTPUT);
@@ -121,11 +115,6 @@ void setup() {
     pinMode(digitalPumpFan, OUTPUT);
 
     digitalWrite(digitalPumpFan, HIGH);//Turn on cooling fan
-
-    //Wait 1 second for communication before throwing error
-    timeoutRx1 = 1000;
-    timeoutRx2 = 1000;
-    timeoutRx3 = 1000;
     runLoop = 0;
 }
 

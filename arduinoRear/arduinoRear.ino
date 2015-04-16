@@ -488,7 +488,7 @@ void reset(int errCode) {
     1. IMD fault
     3. Cockpit ESB
     4. IMD disconnect from tractive system
-    5. Battery less than 10% capacity
+    5. BMS reads battery less than 10% capacity
     10. Lost communication
     11. Acceleration implausibility
     12. BMS current over max allowed
@@ -501,10 +501,10 @@ void reset(int errCode) {
     digitalWrite(digitalRelay4, LOW);
     digitalWrite(digitalRelay6, LOW);//Close discharge AIR
     //BMS shutdown (a work in progress)
-    if (errCode == 1) {
+    if (errCode == 1 || errCode == 4) {
         EEPROM.write(10,1);
     }
-    if (errCode == 2) {
+    if (errCode == 5 || errCode == 12) {
         EEPROM.write(10,2);
     }
     Serial.print(millis());
@@ -516,7 +516,7 @@ void reset(int errCode) {
     startupSequence = 0;//Reset the startup sequence
     eepromChecked = false;
     eepromCheckGood = false;
-    dashSwitch1Val = -1;
+    dashSwitch1Val = -1;//Init values of -1
     dashSwitch2Val = -1;
     dashSwitch3Val = -1;
     dashSwitch4Val = -1;
