@@ -310,8 +310,9 @@ void loop() {
     }
     if (runLoop < millis()) {//Runs 10x per second
         runLoop = millis() + 100;//Push runLoop up 100 ms
-        Serial2.println("ar2:hi");
-        Serial3.println("ar3:hi");
+        Serial1.println("ar2:hi");
+        Serial1.print("ar2:throttle:");
+        Serial1.println(torqueValAdjusted);
 
         //todo read motor/controller/water temp - pins A2-A3
         //todo write error code if emergency buttons pressed? - pins A6-A10

@@ -16,7 +16,7 @@ BEGIN CONFIGURATION
 #define TFT_DC 9
 #define TFT_RST 8
 Adafruit_HX8357 tft = Adafruit_HX8357(TFT_CS, TFT_DC, TFT_RST);
-int oldCtcleDisplay = 0; // so we know if there is a change in cycle display
+int oldCycleDisplay = 0; // so we know if there is a change in cycle display
 /**************************** end screen config */
 
 int ledPinWaterPumpAlert = 11;
@@ -34,30 +34,9 @@ int analogSwitch3b = 30;
 int analogSwitch4a = 32;
 int analogSwitch4b = 34;
 
-int pot1 = 0;//Pot1 and Pot2 used for acceleration
-int pot2 = 1;
-int pot3 = 2;//Pot3 used for brake
-int pot1High = 376;//Pedal pressed
-int pot1Low = 147;//Pedal resting//todo right now the low vals are when a little pressure is applied
-int pot2High = 462;
-int pot2Low = 226;
-int pot3High = 468;//Pot3 used for brake
-int pot3Low = 336;
 /*************************************
 END CONFIGURATION
 *************************************/
-
-float pot1ValAdjusted;
-float pot2ValAdjusted;
-float pot3ValAdjusted;
-float potAccAdjDiff;//Holds the difference between two accelerator readings
-float pot1Range = pot1High - pot1Low;//Ranges that each pot will move (used for percentage calcs)
-float pot2Range = pot2High - pot2Low;
-float pot3Range = pot3High - pot3Low;
-float torqueVal;//0-1000 mapped value for torque
-float torqueValAdjusted;//0-255 adjusted exponentially
-boolean brakePlausActive = false;//Set to true if brakes actuated && torque encoder > 25%
-
 
 String inputCmdStream1 = "";
 boolean stringComplete1 = false;
@@ -67,6 +46,7 @@ unsigned long runLoop;//Stores millisecond value to run main loop every so often
 
 int cycleDisplay = 1;//Stores which view to send to LCD
 
+int torqueVal = 0;
 int rpmVal = 0; // not sure if we will read in the values for RPM or not
 
 boolean ready2Drive = false;//Set to false on startup and soft restart
@@ -152,6 +132,8 @@ void loop() {
             reset();
         } else if (inputCmd1 == "ar2:ready2Drive") {
             ready2Drive = true;
+        } else if (inputCmd1 == "ar2:hi") {
+            Serial1.print("ar1:hi");
         } else if (inputCmd1 == "ar2:waterPumpLed:1") {
             digitalWrite(ledPinWaterPumpAlert, HIGH);
         } else if (inputCmd1 == "ar2:waterPumpLed:0") {
@@ -177,7 +159,7 @@ void loop() {
         } else if (inputCmd1 == "ar2:startupLed3:0") {
             digitalWrite(ledPinStartup3, LOW);
         } else if (inputCmd1.substring(0,13) == "ar2:throttle:") {
-            //todo put throttle bar on screen
+            torqueVal = inputCmd1.substring(13).toInt();
         } else if (inputCmd1.substring(0,10) == "ar2:temp1:") {
             //todo put temperatures on screen
         }
@@ -197,14 +179,14 @@ void loop() {
         //Update LCD todo this needs to be fleshed out
         if (cycleDisplay == 1) {//Default view
             tft.setCursor(298, 10);
-            tft.print(torqueValAdjusted);
+            tft.print(torqueVal);
             tft.setCursor(298, 160);
             tft.print(rpmVal); // if we ever get an rpm value
 
         } else if (cycleDisplay == 2) {
             //need to decide on an alternate display
             tft.setCursor(298, 10);
-            tft.print(torqueValAdjusted);
+            tft.print(torqueVal);
             tft.setCursor(298, 160);
             tft.print(rpmVal); // if we ever get an rpm value
         }
