@@ -68,6 +68,7 @@ void setup() {
     //Wait 1 second for communication before throwing error
     timeoutRx1 = 1000;
     runLoop = 0;
+    tft.begin(HX8357D);
     initScreen(); // function defined below
 }
 
@@ -220,7 +221,7 @@ void SerialEvent1() {
 }
 
 void initScreen() {
-    tft.setRotation(3);
+    tft.setRotation(1);
     tft.fillScreen(0xFFFF);
     tft.setCursor(10, 10);
     tft.setTextColor(0x0000, 0xD5A8); // black text on old gold screen

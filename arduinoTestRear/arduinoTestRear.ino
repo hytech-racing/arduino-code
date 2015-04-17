@@ -101,13 +101,21 @@ void setup() {
     Serial.begin(115200);//Talk back to computer
     //Initialize output pins
     pinMode(digitalRelay1, OUTPUT);
+    digitalWrite(digitalRelay1, HIGH);
     pinMode(digitalRelay2, OUTPUT);
+    digitalWrite(digitalRelay2, HIGH);
     pinMode(digitalRelay3, OUTPUT);
+    digitalWrite(digitalRelay3, HIGH);
     pinMode(digitalRelay4, OUTPUT);
+    digitalWrite(digitalRelay4, HIGH);
     pinMode(digitalRelay5, OUTPUT);
+    digitalWrite(digitalRelay5, HIGH);
     pinMode(digitalRelay6, OUTPUT);
+    digitalWrite(digitalRelay6, HIGH);
     pinMode(digitalRelay7, OUTPUT);
+    digitalWrite(digitalRelay7, HIGH);
     pinMode(digitalReady2DriveSound, OUTPUT);
+    digitalWrite(digitalReady2DriveSound, HIGH);
     pinMode(digitalImd, OUTPUT);//todo output or input?
     pinMode(digitalTransistor4, OUTPUT);
     pinMode(digitalBrake, OUTPUT);
@@ -175,10 +183,10 @@ void loop() {
         Serial.println(torqueValAdjusted);//Prints torque value to computer
 
         if (pot3ValAdjusted > 0) { //Brake light
-            digitalWrite(digitalBrake, HIGH);
+            digitalWrite(digitalBrake, LOW);
             Serial.println("Brake ON");
         } else if (pot3ValAdjusted <= 0) {
-            digitalWrite(digitalBrake, LOW);
+            digitalWrite(digitalBrake, HIGH);
             Serial.println("Brake OFF");
         }
 

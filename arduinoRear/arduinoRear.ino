@@ -235,10 +235,12 @@ void loop() {
             }
             if (startupSequence == 7 && runLoop > millis()) {
                 //Ready to drive sound
-                tone(digitalReady2DriveSound, startupNote);
-                startupNote += 2;
+                //tone(digitalReady2DriveSound, startupNote);
+                //startupNote += 2;
+                digitalWrite(digitalReady2DriveSound, HIGH);
             }
             if (startupSequence == 7 && runLoop < millis()) {
+                digitalWrite(digitalReady2DriveSound, LOW);
                 Serial.println("Vehicle ready to drive");
                 Serial1.println("ar2:ready2Drive");
                 Serial1.println("ar3:ready2Drive");
