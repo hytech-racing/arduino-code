@@ -38,10 +38,10 @@ int analogSwitch4b = 34;
 END CONFIGURATION
 *************************************/
 
-String inputCmdStream1 = "";
-boolean stringComplete1 = false;
-String inputCmd1;
-unsigned long timeoutRx1;//Stores millisecond value to shut off if communication is lost
+String inputCmdStream2 = "";
+boolean stringComplete2 = false;
+String inputCmd2;
+unsigned long timeoutRx2;//Stores millisecond value to shut off if communication is lost
 unsigned long runLoop;//Stores millisecond value to run main loop every so often (instead of using delay)
 
 int cycleDisplay = 1;//Stores which view to send to LCD
@@ -57,8 +57,8 @@ int dashSwitch4Val = -1;
 boolean sendSwitchValsThisLoop = false;
 
 void setup() {
-    Serial1.begin(115200);//Talk to ar1
-    inputCmdStream1.reserve(50);
+    Serial2.begin(115200);//Talk to ar1
+    inputCmdStream2.reserve(50);
     pinMode(ledPinWaterPumpAlert, OUTPUT);
     pinMode(ledPinImdFault, OUTPUT);
     pinMode(ledPinAmsBmsFault, OUTPUT);
@@ -66,7 +66,7 @@ void setup() {
     pinMode(ledPinStartup2, OUTPUT);
     pinMode(ledPinStartup3, OUTPUT);
     //Wait 1 second for communication before throwing error
-    timeoutRx1 = 1000;
+    timeoutRx2 = 1000;
     runLoop = 0;
     tft.begin(HX8357D);
     initScreen(); // function defined below
@@ -111,57 +111,59 @@ void loop() {
         sendSwitchValsThisLoop = true;
     }
     if (sendSwitchValsThisLoop) {
-        Serial1.print("ar1:dashSwitches:");
-        Serial1.print(dashSwitch1Val);
-        Serial1.print(dashSwitch2Val);
-        Serial1.print(dashSwitch3Val);
-        Serial1.println(dashSwitch4Val);
+        Serial2.print("ar1:dashSwitches:");
+        Serial2.print(dashSwitch1Val);
+        Serial2.print(dashSwitch2Val);
+        Serial2.print(dashSwitch3Val);
+        Serial2.println(dashSwitch4Val);
         sendSwitchValsThisLoop = false;
     }
 
-    if (stringComplete1) {//Recieved something from ar1
-        int newLineIndex = inputCmdStream1.indexOf('/n');
+    if (stringComplete2) {//Recieved something from ar1
+        tft.setCursor(298, 80);
+        tft.print("RECEIVED");
+        int newLineIndex = inputCmdStream2.indexOf('/n');
         if (newLineIndex > -1) {//Newline is found
-            inputCmd1 = inputCmdStream1.substring(0, newLineIndex - 1);
-            inputCmdStream1 = inputCmdStream1.substring(newLineIndex + 2);
+            inputCmd2 = inputCmdStream2.substring(0, newLineIndex - 1);
+            inputCmdStream2 = inputCmdStream2.substring(newLineIndex + 2);
         }
-        if (inputCmdStream1.indexOf('\n') == -1) {//No more complete commands
-            stringComplete1 = false;
+        if (inputCmdStream2.indexOf('\n') == -1) {//No more complete commands
+            stringComplete2 = false;
         }
-        if (inputCmd1.substring(0,11) == "ar2:restart") {
+        if (inputCmd2.substring(0,11) == "ar2:restart") {
             //Restarting vehicle
             reset();
-        } else if (inputCmd1 == "ar2:ready2Drive") {
+        } else if (inputCmd2 == "ar2:ready2Drive") {
             ready2Drive = true;
-        } else if (inputCmd1 == "ar2:hi") {
+        } else if (inputCmd2 == "ar2:hi") {
             Serial1.print("ar1:hi");
-        } else if (inputCmd1 == "ar2:waterPumpLed:1") {
+        } else if (inputCmd2 == "ar2:waterPumpLed:1") {
             digitalWrite(ledPinWaterPumpAlert, HIGH);
-        } else if (inputCmd1 == "ar2:waterPumpLed:0") {
+        } else if (inputCmd2 == "ar2:waterPumpLed:0") {
             digitalWrite(ledPinWaterPumpAlert, LOW);
-        } else if (inputCmd1 == "ar2:imdFaultLed:1") {
+        } else if (inputCmd2 == "ar2:imdFaultLed:1") {
             digitalWrite(ledPinImdFault, HIGH);
-        } else if (inputCmd1 == "ar2:imdFaultLed:0") {
+        } else if (inputCmd2 == "ar2:imdFaultLed:0") {
             digitalWrite(ledPinImdFault, LOW);
-        } else if (inputCmd1 == "ar2:amsBmsFaultLed:1") {
+        } else if (inputCmd2 == "ar2:amsBmsFaultLed:1") {
             digitalWrite(ledPinAmsBmsFault, HIGH);
-        } else if (inputCmd1 == "ar2:amsBmsFaultLed:0") {
+        } else if (inputCmd2 == "ar2:amsBmsFaultLed:0") {
             digitalWrite(ledPinAmsBmsFault, LOW);
-        } else if (inputCmd1 == "ar2:startupLed1:1") {
+        } else if (inputCmd2 == "ar2:startupLed1:1") {
             digitalWrite(ledPinStartup1, HIGH);
-        } else if (inputCmd1 == "ar2:startupLed1:0") {
+        } else if (inputCmd2 == "ar2:startupLed1:0") {
             digitalWrite(ledPinStartup1, LOW);
-        } else if (inputCmd1 == "ar2:startupLed2:1") {
+        } else if (inputCmd2 == "ar2:startupLed2:1") {
             digitalWrite(ledPinStartup2, HIGH);
-        } else if (inputCmd1 == "ar2:startupLed2:0") {
+        } else if (inputCmd2 == "ar2:startupLed2:0") {
             digitalWrite(ledPinStartup2, LOW);
-        } else if (inputCmd1 == "ar2:startupLed3:1") {
+        } else if (inputCmd2 == "ar2:startupLed3:1") {
             digitalWrite(ledPinStartup3, HIGH);
-        } else if (inputCmd1 == "ar2:startupLed3:0") {
+        } else if (inputCmd2 == "ar2:startupLed3:0") {
             digitalWrite(ledPinStartup3, LOW);
-        } else if (inputCmd1.substring(0,13) == "ar2:throttle:") {
-            torqueVal = inputCmd1.substring(13).toInt();
-        } else if (inputCmd1.substring(0,10) == "ar2:temp1:") {
+        } else if (inputCmd2.substring(0,13) == "ar2:throttle:") {
+            torqueVal = inputCmd2.substring(13).toInt();
+        } else if (inputCmd2.substring(0,10) == "ar2:temp1:") {
             //todo put temperatures on screen
         }
     }
@@ -195,11 +197,11 @@ void loop() {
 }
 
 void serialTimeout() {
-    if (timeoutRx1 < millis()) {//If 1 second has passed since receiving a complete command from main Arduino reset ***SOMETHING HAS GONE WRONG***
+    if (timeoutRx2 < millis()) {//If 1 second has passed since receiving a complete command from main Arduino reset ***SOMETHING HAS GONE WRONG***
         Serial.print("ar1:print:");
         Serial.println(millis());
-        Serial1.println("ar1:print:ar2 lost connection to ar1");
-        Serial1.println("ar1:restart");
+        Serial2.println("ar1:print:ar2 lost connection to ar1");
+        Serial2.println("ar1:restart");
         reset();
 
         tft.setTextColor(0xF800);
@@ -208,14 +210,14 @@ void serialTimeout() {
     }
 }
 
-void SerialEvent1() {
-    while (Serial1.available()) {
-        char newChar = (char)Serial1.read();
-        if (newChar == '\n') {//NOTE: inputCmd1 does NOT include \n
-            stringComplete1 = true;
-            timeoutRx1 = millis() + 1000; //Number of milliseconds since program started, plus 1000, used to timeout if no complete command received for 1 second
+void SerialEvent2() {
+    while (Serial2.available()) {
+        char newChar = (char)Serial2.read();
+        if (newChar == '\n') {
+            stringComplete2 = true;
+            timeoutRx2 = millis() + 1000; //Number of milliseconds since program started, plus 1000, used to timeout if no complete command received for 1 second
         } else {
-            inputCmdStream1 += newChar;
+            inputCmdStream2 += newChar;
         }
     }
 }
