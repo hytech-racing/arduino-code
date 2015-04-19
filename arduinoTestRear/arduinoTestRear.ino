@@ -20,7 +20,7 @@ int digitalReady2DriveSound = 9; //Relay 8
 int digitalImd = 32; // PWM read pin
 int digitalTransistor4 = 46;
 int digitalBrake = 48; //transistor3
-int digitalTransistor2 = 50;
+int digitalTransistor2 = 50; // DOES NOT WORK
 int digitalPumpFan = 52; //transistor1
 int mux8 = 40;
 int mux4 = 28;
@@ -286,6 +286,11 @@ void loop() {
         else {
           Serial.println("LV Battery is fine");
         }
+        for(i = 0; i < 12; i++) {
+          Serial.print(lvbatt[i]);
+          Serial.write(32);
+        }
+        Serial.println("  ");      
         /*********************************
         End LV Batery Reading Code
         **********************************/
