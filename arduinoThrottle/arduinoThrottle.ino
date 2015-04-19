@@ -45,9 +45,12 @@ void setup() {
 
 void loop() {
     //Read analog values all at once
-    pot1ValAdjusted = analogRead(pot1);
-    pot2ValAdjusted = analogRead(pot2);
-    pot3ValAdjusted = analogRead(pot3);
+    pot1ValAdjusted = analogRead(pot1) + analogRead(pot1) + analogRead(pot1);
+    pot2ValAdjusted = analogRead(pot2) + analogRead(pot2) + analogRead(pot2);
+    pot3ValAdjusted = analogRead(pot3) + analogRead(pot3) + analogRead(pot3);
+    pot1ValAdjusted /= 3;
+    pot2ValAdjusted /= 3;
+    pot3ValAdjusted /= 3;
 
     //Now calculate remapped values
     pot1ValAdjusted = pot1ValAdjusted - pot1Low;

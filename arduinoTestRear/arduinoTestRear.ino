@@ -149,9 +149,12 @@ void loop() {
         Throttle reading code
         ******************************/
         //Read analog values all at once
-        pot1ValAdjusted = analogRead(pot1);
-        pot2ValAdjusted = analogRead(pot2);
-        pot3ValAdjusted = analogRead(pot3);
+        pot1ValAdjusted = analogRead(pot1) + analogRead(pot1) + analogRead(pot1);
+        pot2ValAdjusted = analogRead(pot2) + analogRead(pot2) + analogRead(pot2);
+        pot3ValAdjusted = analogRead(pot3) + analogRead(pot3) + analogRead(pot3);
+        pot1ValAdjusted /= 3;
+        pot2ValAdjusted /= 3;
+        pot3ValAdjusted /= 3;
         Serial.print("Raw throttle readings: ");
         Serial.print(pot1ValAdjusted);
         Serial.write(32); // space
@@ -195,10 +198,10 @@ void loop() {
         Serial.println(torqueValAdjusted);//Prints torque value to computer
 
         if (pot3ValAdjusted > 0) { //Brake light
-            digitalWrite(digitalBrake, LOW);
+            digitalWrite(digitalBrake, HIGH);
             Serial.println("Brake ON");
         } else if (pot3ValAdjusted <= 0) {
-            digitalWrite(digitalBrake, HIGH);
+            digitalWrite(digitalBrake, LOW);
             Serial.println("Brake OFF");
         }
 

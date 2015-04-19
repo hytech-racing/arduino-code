@@ -16,23 +16,26 @@ BEGIN CONFIGURATION
 #define TFT_DC 9
 #define TFT_RST 8
 Adafruit_HX8357 tft = Adafruit_HX8357(TFT_CS, TFT_DC, TFT_RST);
-int oldCycleDisplay = 0; // so we know if there is a change in cycle display
 /**************************** end screen config */
 
-int ledPinWaterPumpAlert = 11;
 int ledPinImdFault = 12;
-int ledPinAmsBmsFault = 13;
-int ledPinStartup1 = 14;
-int ledPinStartup2 = 15;
-int ledPinStartup3 = 16;
-int analogCycleDisplay = 8;
-int analogSwitch1a = 22;
-int analogSwitch1b = 24;
-int analogSwitch2 = 26;
-int analogSwitch3a = 28;
-int analogSwitch3b = 30;
-int analogSwitch4a = 32;
-int analogSwitch4b = 34;
+int ledPinBmsFault = 11;
+int ledPinSwitch1 = 14;
+int ledPinSwitch2 = 15;
+//int ledPinButton; (Not connected)
+int ledPinSwitch4 = 14;
+int ledPinSwitch5 = 15;
+//int analogSwitch1a; (Not connected)
+//int analogSwitch1b; (Not connected)
+int analogSwitch2a = 2;
+int analogSwitch2b = 5;
+int analogButton = 6;
+//int analogSwitch3a; (Not connected)
+//int analogSwitch3b; (Not connected)
+//int analogSwitch4a; (Not connected)
+//int analogSwitch4b; (Not connected)
+int analogButtonCycleDisplay = 7;
+
 
 /*************************************
 END CONFIGURATION
@@ -46,25 +49,32 @@ unsigned long runLoop;//Stores millisecond value to run main loop every so often
 
 int cycleDisplay = 1;//Stores which view to send to LCD
 
-int torqueVal = 0;
-int rpmVal = 0; // not sure if we will read in the values for RPM or not
+int temp1Val = -1;
+int torqueVal = -1;
+int rpmVal = -1; // not sure if we will read in the values for RPM or not
 
 boolean ready2Drive = false;//Set to false on startup and soft restart
-int dashSwitch1Val = -1;
+boolean resetLoop = false;//Run stuff after restart
+unsigned long resetTimestamp = 0;
+
 int dashSwitch2Val = -1;
-int dashSwitch3Val = -1;
-int dashSwitch4Val = -1;
+int dashButtonVal = -1;
 boolean sendSwitchValsThisLoop = false;
 
 void setup() {
     Serial2.begin(115200);//Talk to ar1
     inputCmdStream2.reserve(50);
-    pinMode(ledPinWaterPumpAlert, OUTPUT);
     pinMode(ledPinImdFault, OUTPUT);
-    pinMode(ledPinAmsBmsFault, OUTPUT);
-    pinMode(ledPinStartup1, OUTPUT);
-    pinMode(ledPinStartup2, OUTPUT);
-    pinMode(ledPinStartup3, OUTPUT);
+    pinMode(ledPinBmsFault, OUTPUT);
+    pinMode(ledPinSwitch1, OUTPUT);
+    pinMode(ledPinSwitch2, OUTPUT);
+    pinMode(ledPinSwitch4, OUTPUT);
+    pinMode(ledPinSwitch5, OUTPUT);
+    pinMode(analogSwitch2a, INPUT);
+    pinMode(analogSwitch2b, INPUT);
+    pinMode(analogButton, INPUT);
+    pinMode(analogButtonCycleDisplay, INPUT);
+
     //Wait 1 second for communication before throwing error
     timeoutRx2 = 1000;
     runLoop = 0;
@@ -73,59 +83,13 @@ void setup() {
 }
 
 void loop() {
-    if (dashSwitch1Val != 0 && analogRead(analogSwitch1a) > 500) {//Change to low (0)
-        dashSwitch1Val = 0;
-        sendSwitchValsThisLoop = true;
-    } else if (dashSwitch1Val != 2 && analogRead(analogSwitch1b) > 500) {//Change to high (2)
-        dashSwitch1Val = 2;
-        sendSwitchValsThisLoop = true;
-    } else if (dashSwitch1Val != 1 && analogRead(analogSwitch1a) < 500 && analogRead(analogSwitch1b) < 500) {//Change to neutral (1)
-        dashSwitch1Val = 1;
-        sendSwitchValsThisLoop = true;
-    }
-    if (dashSwitch2Val != 1 && analogRead(analogSwitch2) > 500) {//Change to low (0)
-        dashSwitch2Val = 1;
-        sendSwitchValsThisLoop = true;
-    } else if (dashSwitch2Val != 0 && analogRead(analogSwitch2) < 500) {//Change to high (1)
-        dashSwitch2Val = 0;
-        sendSwitchValsThisLoop = true;
-    }
-    if (dashSwitch3Val != 0 && analogRead(analogSwitch3a) > 500) {//Change to low (0)
-        dashSwitch3Val = 0;
-        sendSwitchValsThisLoop = true;
-    } else if (dashSwitch3Val != 2 && analogRead(analogSwitch3b) > 500) {//Change to high (2)
-        dashSwitch3Val = 2;
-        sendSwitchValsThisLoop = true;
-    } else if (dashSwitch3Val != 1 && analogRead(analogSwitch3a) < 500 && analogRead(analogSwitch3b) < 500) {//Change to neutral (1)
-        dashSwitch3Val = 1;
-        sendSwitchValsThisLoop = true;
-    }
-    if (dashSwitch4Val != 0 && analogRead(analogSwitch4a) > 500) {//Change to low (0)
-        dashSwitch4Val = 0;
-        sendSwitchValsThisLoop = true;
-    } else if (dashSwitch4Val != 2 && analogRead(analogSwitch4b) > 500) {//Change to high (2)
-        dashSwitch4Val = 2;
-        sendSwitchValsThisLoop = true;
-    } else if (dashSwitch4Val != 1 && analogRead(analogSwitch4a) < 500 && analogRead(analogSwitch4b) < 500) {//Change to neutral (1)
-        dashSwitch4Val = 1;
-        sendSwitchValsThisLoop = true;
-    }
-    if (sendSwitchValsThisLoop) {
-        Serial2.print("ar1:dashSwitches:");
-        Serial2.print(dashSwitch1Val);
-        Serial2.print(dashSwitch2Val);
-        Serial2.print(dashSwitch3Val);
-        Serial2.println(dashSwitch4Val);
-        sendSwitchValsThisLoop = false;
-    }
-
+    checkSwitches();
+    SerialEvent2();
     if (stringComplete2) {//Recieved something from ar1
-        tft.setCursor(298, 80);
-        tft.print("RECEIVED");
-        int newLineIndex = inputCmdStream2.indexOf('/n');
+        int newLineIndex = inputCmdStream2.indexOf('\n');
         if (newLineIndex > -1) {//Newline is found
             inputCmd2 = inputCmdStream2.substring(0, newLineIndex - 1);
-            inputCmdStream2 = inputCmdStream2.substring(newLineIndex + 2);
+            inputCmdStream2 = inputCmdStream2.substring(newLineIndex + 1);
         }
         if (inputCmdStream2.indexOf('\n') == -1) {//No more complete commands
             stringComplete2 = false;
@@ -137,41 +101,41 @@ void loop() {
             ready2Drive = true;
         } else if (inputCmd2 == "ar2:hi") {
             Serial1.print("ar1:hi");
-        } else if (inputCmd2 == "ar2:waterPumpLed:1") {
-            digitalWrite(ledPinWaterPumpAlert, HIGH);
-        } else if (inputCmd2 == "ar2:waterPumpLed:0") {
-            digitalWrite(ledPinWaterPumpAlert, LOW);
         } else if (inputCmd2 == "ar2:imdFaultLed:1") {
             digitalWrite(ledPinImdFault, HIGH);
         } else if (inputCmd2 == "ar2:imdFaultLed:0") {
             digitalWrite(ledPinImdFault, LOW);
-        } else if (inputCmd2 == "ar2:amsBmsFaultLed:1") {
-            digitalWrite(ledPinAmsBmsFault, HIGH);
-        } else if (inputCmd2 == "ar2:amsBmsFaultLed:0") {
-            digitalWrite(ledPinAmsBmsFault, LOW);
-        } else if (inputCmd2 == "ar2:startupLed1:1") {
-            digitalWrite(ledPinStartup1, HIGH);
-        } else if (inputCmd2 == "ar2:startupLed1:0") {
-            digitalWrite(ledPinStartup1, LOW);
-        } else if (inputCmd2 == "ar2:startupLed2:1") {
-            digitalWrite(ledPinStartup2, HIGH);
-        } else if (inputCmd2 == "ar2:startupLed2:0") {
-            digitalWrite(ledPinStartup2, LOW);
-        } else if (inputCmd2 == "ar2:startupLed3:1") {
-            digitalWrite(ledPinStartup3, HIGH);
-        } else if (inputCmd2 == "ar2:startupLed3:0") {
-            digitalWrite(ledPinStartup3, LOW);
+        } else if (inputCmd2 == "ar2:bmsFaultLed:1") {
+            digitalWrite(ledPinBmsFault, HIGH);
+        } else if (inputCmd2 == "ar2:bmsFaultLed:0") {
+            digitalWrite(ledPinBmsFault, LOW);
+        } else if (inputCmd2 == "ar2:ledSwitch1:1") {
+            digitalWrite(ledPinSwitch1, HIGH);
+        } else if (inputCmd2 == "ar2:ledSwitch1:0") {
+            digitalWrite(ledPinSwitch1, LOW);
+        } else if (inputCmd2 == "ar2:ledSwitch2:1") {
+            digitalWrite(ledPinSwitch2, HIGH);
+        } else if (inputCmd2 == "ar2:ledSwitch2:0") {
+            digitalWrite(ledPinSwitch2, LOW);
+        } else if (inputCmd2 == "ar2:ledSwitch4:1") {
+            digitalWrite(ledPinSwitch4, HIGH);
+        } else if (inputCmd2 == "ar2:ledSwitch4:0") {
+            digitalWrite(ledPinSwitch4, LOW);
+        } else if (inputCmd2 == "ar2:ledSwitch5:1") {
+            digitalWrite(ledPinSwitch5, HIGH);
+        } else if (inputCmd2 == "ar2:ledSwitch5:0") {
+            digitalWrite(ledPinSwitch5, LOW);
         } else if (inputCmd2.substring(0,13) == "ar2:throttle:") {
             torqueVal = inputCmd2.substring(13).toInt();
         } else if (inputCmd2.substring(0,10) == "ar2:temp1:") {
             //todo put temperatures on screen
+            temp1Val = inputCmd2.substring(10).toInt();
         }
     }
-
     if (runLoop < millis()) {//Runs whether or not car is ready to drive
         runLoop = millis() + 100;//Push runLoop up 100 ms
 
-        if (analogRead(analogCycleDisplay) > 1000) {//If cycle display button is pressed
+        if (digitalRead(analogButtonCycleDisplay) == HIGH) {//If cycle display button is pressed
             if (cycleDisplay == 1) {
                 cycleDisplay = 2;
             } else if (cycleDisplay == 2) {
@@ -181,32 +145,42 @@ void loop() {
 
         //Update LCD todo this needs to be fleshed out
         if (cycleDisplay == 1) {//Default view
-            tft.setCursor(298, 10);
+            tft.setCursor(270, 10);
             tft.print(torqueVal);
-            tft.setCursor(298, 160);
+            tft.setCursor(270, 100);
             tft.print(rpmVal); // if we ever get an rpm value
 
         } else if (cycleDisplay == 2) {
             //need to decide on an alternate display
-            tft.setCursor(298, 10);
+            tft.setCursor(280, 10);
             tft.print(torqueVal);
-            tft.setCursor(298, 160);
+            tft.setCursor(280, 100);
             tft.print(rpmVal); // if we ever get an rpm value
         }
+        
+        /*if (resetLoop && resetTimestamp + 5000 < millis() ) {
+            initScreen();
+            resetLoop = false;
+        }*/
+        
+        serialTimeout();
     }
 }
 
 void serialTimeout() {
     if (timeoutRx2 < millis()) {//If 1 second has passed since receiving a complete command from main Arduino reset ***SOMETHING HAS GONE WRONG***
-        Serial.print("ar1:print:");
-        Serial.println(millis());
+        Serial2.print("ar1:print:");
+        Serial2.println(millis());
         Serial2.println("ar1:print:ar2 lost connection to ar1");
         Serial2.println("ar1:restart");
         reset();
 
         tft.setTextColor(0xF800);
-        tft.setCursor(298, 160);
-        tft.print("Serial connection lost");
+        tft.setCursor(10, 265);
+        tft.setTextSize(4);
+        tft.print("Serial conn. lost");
+        tft.setTextSize(6);//Put size and color back to normal
+        tft.setTextColor(0x0000);
     }
 }
 
@@ -216,9 +190,8 @@ void SerialEvent2() {
         if (newChar == '\n') {
             stringComplete2 = true;
             timeoutRx2 = millis() + 1000; //Number of milliseconds since program started, plus 1000, used to timeout if no complete command received for 1 second
-        } else {
-            inputCmdStream2 += newChar;
         }
+        inputCmdStream2 += newChar;
     }
 }
 
@@ -229,27 +202,61 @@ void initScreen() {
     tft.setTextColor(0x0000, 0xD5A8); // black text on old gold screen
     tft.setTextSize(6);
     tft.print("Torque: ");
-    tft.setCursor(80, 118);
+    tft.setCursor(10, 100);
     tft.print("RPM: ");
-    tft.setCursor(118, 160);
-    tft.print("ERR ");
+    /*tft.setCursor(10, 160);
+    tft.print("ERR ");*/
     tft.setTextSize(1);
     tft.setCursor(10, 300);
     tft.setTextColor(0xFFFF, 0xD5A8);
     tft.print("HyTech Racing 2015. You can't get much more ramblin' than this");
     tft.setTextColor(0x0000, 0xD5A8);
-    tft.setTextSize(0x06);
+    tft.setTextSize(6);
 }
 
 void reset() {
     ready2Drive = false;
-    //todo show error on screen
+    resetLoop = true;
+    resetTimestamp = millis();
+    tft.setCursor(10, 200);
+    tft.setTextSize(5);
+    tft.print("Vehicle reset");
+    tft.setTextSize(6);//Put size and color back to normal
+    tft.setTextColor(0x0000);
     //todo reset stuff like error LEDs (also make sure ar1 sends errors after this loop runs)
     //todo this part might need to happen on a soft restart below
-    digitalWrite(ledPinWaterPumpAlert, LOW);
     digitalWrite(ledPinImdFault, LOW);
-    digitalWrite(ledPinAmsBmsFault, LOW);
-    digitalWrite(ledPinStartup1, LOW);
-    digitalWrite(ledPinStartup2, LOW);
-    digitalWrite(ledPinStartup3, LOW);
+    digitalWrite(ledPinBmsFault, LOW);
+    digitalWrite(ledPinSwitch1, LOW);
+    digitalWrite(ledPinSwitch2, LOW);
+    digitalWrite(ledPinSwitch4, LOW);
+    digitalWrite(ledPinSwitch5, LOW);
+}
+
+void checkSwitches() {
+    if (dashSwitch2Val != 1 && digitalRead(analogSwitch2a) == HIGH) {
+        dashSwitch2Val = 1;
+        sendSwitchValsThisLoop = true;
+    } else if (dashSwitch2Val != 0 && digitalRead(analogSwitch2a) == LOW) {
+        dashSwitch2Val = 0;
+        sendSwitchValsThisLoop = true;
+    }
+    if (dashButtonVal != 1 && digitalRead(analogButton) == HIGH) {
+        dashButtonVal = 1;
+        sendSwitchValsThisLoop = true;
+    } else if (dashButtonVal != 0 && digitalRead(analogButton) == LOW) {
+        dashButtonVal = 0;
+        sendSwitchValsThisLoop = true;
+    }
+
+    if (sendSwitchValsThisLoop) {
+        Serial2.print("ar1:dashSwitches:");
+        Serial2.print(dashSwitch2Val);
+        Serial2.println(dashButtonVal);
+        sendSwitchValsThisLoop = false;
+
+        Serial.print("ar1:dashSwitches:");
+        Serial.print(dashSwitch2Val);
+        Serial.println(dashButtonVal);
+    }
 }

@@ -107,13 +107,21 @@ void setup() {
     inputCmdStream3.reserve(50);
     //Initialize output pins
     pinMode(digitalRelay1, OUTPUT);
+    digitalWrite(digitalRelay1, HIGH);
     pinMode(digitalRelay2, OUTPUT);
+    digitalWrite(digitalRelay2, HIGH);
     pinMode(digitalRelay3, OUTPUT);
+    digitalWrite(digitalRelay3, HIGH);
     pinMode(digitalRelay4, OUTPUT);
+    digitalWrite(digitalRelay4, HIGH);
     pinMode(digitalRelay5, OUTPUT);
+    digitalWrite(digitalRelay5, HIGH);
     pinMode(digitalRelay6, OUTPUT);
+    digitalWrite(digitalRelay6, HIGH);
     pinMode(digitalRelay7, OUTPUT);
+    digitalWrite(digitalRelay7, HIGH);
     pinMode(digitalReady2DriveSound, OUTPUT);
+    digitalWrite(digitalReady2DriveSound, HIGH);
     pinMode(digitalImd, OUTPUT);//todo output or input?
     pinMode(digitalTransistor4, OUTPUT);
     pinMode(digitalBrake, OUTPUT);
@@ -130,6 +138,10 @@ void setup() {
 }
 
 void loop() {
+    serialEvent1();
+    serialEvent2();
+    serialEvent3();
+
     if (!ready2Drive) {
         if (!eepromChecked) {//Runs on startup and after high voltage shutdowns
             //Check if EEPROM error code was set
@@ -185,16 +197,16 @@ void loop() {
             }
             if (startupSequence == 2) {
                 //Close relays 1, 3
-                digitalWrite(digitalRelay1, HIGH);
-                digitalWrite(digitalRelay3, HIGH);
+                digitalWrite(digitalRelay1, LOW);
+                digitalWrite(digitalRelay3, LOW);
                 startupSequence = 3;
                 runLoop = millis() + 1000;
                 Serial.println("Closed relays 1,3");
             }
             if (startupSequence == 3 && runLoop < millis()) {//At least 1 second has passed since sequence part 1
                 //Close relays 2, precharge
-                digitalWrite(digitalRelay2, HIGH);
-                digitalWrite(digitalRelay5, HIGH);
+                digitalWrite(digitalRelay2, LOW);
+                digitalWrite(digitalRelay5, LOW);
                 startupSequence = 4;
                 runLoop = millis() + 3000;
                 Serial.println("Closed relays 2, precharge");
@@ -209,9 +221,9 @@ void loop() {
                     }
                     if (dashSwitch2Val == 1) {//wait for button press
                         Serial1.println("ar2:startupLed3:0");
-                        digitalWrite(digitalRelay6, HIGH);
-                        digitalWrite(digitalRelay5, LOW);
-                        digitalWrite(digitalRelay4, HIGH);
+                        digitalWrite(digitalRelay6, LOW);
+                        digitalWrite(digitalRelay5, HIGH);//TODO CHECK THIS CHECK THIS
+                        digitalWrite(digitalRelay4, LOW);
                         startupSequence = 5;
                         Serial.println("Opened relays discharge,precharge");
                         Serial.println("Closed relay 4");
@@ -237,10 +249,10 @@ void loop() {
                 //Ready to drive sound
                 //tone(digitalReady2DriveSound, startupNote);
                 //startupNote += 2;
-                digitalWrite(digitalReady2DriveSound, HIGH);
+                digitalWrite(digitalReady2DriveSound, LOW);
             }
             if (startupSequence == 7 && runLoop < millis()) {
-                digitalWrite(digitalReady2DriveSound, LOW);
+                digitalWrite(digitalReady2DriveSound, HIGH);
                 Serial.println("Vehicle ready to drive");
                 Serial1.println("ar2:ready2Drive");
                 Serial1.println("ar3:ready2Drive");
@@ -261,7 +273,7 @@ void loop() {
         newLineIndex = inputCmdStream1.indexOf('\n');
         if (newLineIndex > -1) {//Newline is found
             inputCmd1 = inputCmdStream1.substring(0, newLineIndex - 1);
-            inputCmdStream1 = inputCmdStream1.substring(newLineIndex + 2);
+            inputCmdStream1 = inputCmdStream1.substring(newLineIndex + 1);
         }
         if (inputCmdStream1.indexOf('\n') == -1) {//No more complete commands
             stringComplete1 = false;
@@ -292,7 +304,7 @@ void loop() {
         newLineIndex = inputCmdStream2.indexOf('\n');
         if (newLineIndex > -1) {//Newline is found
             inputCmd2 = inputCmdStream2.substring(0, newLineIndex - 1);
-            inputCmdStream2 = inputCmdStream2.substring(newLineIndex + 2);
+            inputCmdStream2 = inputCmdStream2.substring(newLineIndex + 1);
         }
         if (inputCmdStream2.indexOf('\n') == -1) {//No more complete commands
             stringComplete2 = false;
@@ -303,7 +315,7 @@ void loop() {
         newLineIndex = inputCmdStream3.indexOf('\n');
         if (newLineIndex > -1) {//Newline is found
             inputCmd3 = inputCmdStream3.substring(0, newLineIndex - 1);
-            inputCmdStream3 = inputCmdStream3.substring(newLineIndex + 2);
+            inputCmdStream3 = inputCmdStream3.substring(newLineIndex + 1);
         }
         if (inputCmdStream3.indexOf('\n') == -1) {//No more complete commands
             stringComplete3 = false;
@@ -498,11 +510,11 @@ void reset(int errCode) {
     13. Received restart from AR2
     */
     //ALL shutdowns
-    digitalWrite(digitalRelay1, LOW);
-    digitalWrite(digitalRelay2, LOW);
-    digitalWrite(digitalRelay3, LOW);
-    digitalWrite(digitalRelay4, LOW);
-    digitalWrite(digitalRelay6, LOW);//Close discharge AIR
+    digitalWrite(digitalRelay1, HIGH);
+    digitalWrite(digitalRelay2, HIGH);
+    digitalWrite(digitalRelay3, HIGH);
+    digitalWrite(digitalRelay4, HIGH);
+    digitalWrite(digitalRelay6, LOW);//TODO CHECK THIS CHECK THIS Close discharge AIR
     //BMS shutdown (a work in progress)
     if (errCode == 1 || errCode == 4) {
         EEPROM.write(10,1);
