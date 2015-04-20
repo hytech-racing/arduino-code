@@ -80,6 +80,7 @@ void setup() {
     runLoop = 0;
     tft.begin(HX8357D);
     initScreen(); // function defined below
+    Serial2.println();
 }
 
 void loop() {
@@ -234,11 +235,14 @@ void reset() {
 }
 
 void checkSwitches() {
-    if (dashSwitch2Val != 1 && digitalRead(analogSwitch2a) == HIGH) {
+    if (dashSwitch2Val != 0 && digitalRead(analogSwitch2a) == HIGH && digitalRead(analogSwitch2b == LOW)) {
+        dashSwitch2Val = 0;
+        sendSwitchValsThisLoop = true;
+    } else if (dashSwitch2Val != 1 && digitalRead(analogSwitch2a) == LOW && digitalRead(analogSwitch2b) == LOW) {
         dashSwitch2Val = 1;
         sendSwitchValsThisLoop = true;
-    } else if (dashSwitch2Val != 0 && digitalRead(analogSwitch2a) == LOW) {
-        dashSwitch2Val = 0;
+    } else if (dashSwitch2Val != 2 && digitalRead(analogSwitch2a) == LOW && digitalRead(analogSwitch2b) == HIGH) {
+        dashSwitch2Val = 2;
         sendSwitchValsThisLoop = true;
     }
     if (dashButtonVal != 1 && digitalRead(analogButton) == HIGH) {

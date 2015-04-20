@@ -13,10 +13,10 @@ int digitalRelay1 = 2;
 int digitalRelay2 = 3;
 int digitalRelay3 = 4;
 int digitalRelay4 = 5;
-int digitalRelay5 = 6;
-int digitalRelay6 = 7;
-int digitalRelay7 = 8;
-int digitalReady2DriveSound = 9; //Relay 8
+int digitalRelay5 = 9;
+int digitalRelay6 = 8;
+int digitalRelay7 = 7;
+int digitalReady2DriveSound = 6; //Relay 8
 int digitalImd = 32; // PWM read pin
 int digitalTransistor4 = 46;
 int digitalBrake = 48; //transistor3
@@ -90,11 +90,10 @@ boolean eepromChecked = false;//Used so eeprom checked only once when starting o
 boolean ready2Drive = false;
 int startupSequence = 0;//Holds startup stage
 int eepromErrCode = 0;//Holds eeprom error code
-int startupNote = 200;
-int dashSwitch1Val = -1;
+boolean startupSequencePrinted = false;//So stuff gets printed once per startup stage
 int dashSwitch2Val = -1;
-int dashSwitch3Val = -1;
-int dashSwitch4Val = -1;
+int dashButtonVal = -1;
+boolean dashButtonPressedMemory = false;//Remembers momentary button press till acted upon
 int newLineIndex;
 
 void setup() {
@@ -175,87 +174,107 @@ void loop() {
         }
         if (eepromChecked && eepromCheckGood) {//Eeprom check is finished
             if (startupSequence == 0) {
-                if (dashSwitch1Val != -1 && dashSwitch1Val != 1) {//Bypass switch is not neutral
-                    Serial1.println("ar2:initSwitchFault:1");
-                    Serial.println("Init switch in improper position");
+                if (dashSwitch2Val != -1 && dashSwitch2Val != 1) {//Init switch is not neutral
+                    if (!startupSequencePrinted) {
+                        startupSequencePrinted = true;
+                        Serial1.println("ar2:startup:0");
+                        Serial.println("Init switch in improper position");
+                    }
                 }
-                if (dashSwitch1Val == 1 && dashSwitch2Val == 0) {//Bypass switch is neutral and init button not pressed
-                    Serial1.println("ar2:initSwitchFault:0");//Make dash Arduino turn off error light
-                    Serial.println("Init switch position fault cleared");
+                if (dashSwitch2Val == 1) {//Init switch is neutral
+                    startupSequencePrinted = false;
+                    Serial1.println("ar2:startup:1");
+                    Serial.println("Init switch in proper position");
                     startupSequence = 1;
+                    //Prep for next section
+                    dashButtonPressedMemory = false;
+                    Serial.println("Waiting to begin startup sequence");
+                    Serial.println("Press init button");
                 }
             }
             if (startupSequence == 1) {
                 //Begin startup sequence
-                Serial.println("Waiting to begin startup sequence");
-                Serial.println("Flip IMD bypass switch up")
-
-                if (dashSwitch2Val == 1) {//wait for initialize switch to continue
+                if (dashButtonPressedMemory) {//wait for init button to continue
+                    dashButtonPressedMemory = false;
+                    startupSequencePrinted = false;
                     Serial.println("Startup sequence activated");
+                    //Prep for next section
                     startupSequence = 2;
+                    Serial1.println("ar2:startup:2");
                 }
             }
             if (startupSequence == 2) {
                 //Close relays 1, 3
                 digitalWrite(digitalRelay1, LOW);
                 digitalWrite(digitalRelay3, LOW);
-                startupSequence = 3;
                 runLoop = millis() + 1000;
                 Serial.println("Closed relays 1,3");
+                //Prep for next section
+                startupSequence = 3;
+                Serial1.println("ar2:startup:3");
             }
             if (startupSequence == 3 && runLoop < millis()) {//At least 1 second has passed since sequence part 1
                 //Close relays 2, precharge
                 digitalWrite(digitalRelay2, LOW);
                 digitalWrite(digitalRelay5, LOW);
-                startupSequence = 4;
                 runLoop = millis() + 3000;
                 Serial.println("Closed relays 2, precharge");
+                //Prep for next section
+                startupSequence = 4;
+                Serial1.println("ar2:startup:4");
             }
             if (startupSequence == 4 && runLoop < millis()) {
                 //todo check voltage behind dcdc converter (tractive active lights)
                 if (true) {
-                    boolean startupVoltageLedOn = false;
-                    if (!startupVoltageLedOn) {
-                        Serial1.println("ar2:startupLed3:1");//todo maybe change which LED
-                        Serial.println("Press start button");
-                    }
-                    if (dashSwitch2Val == 1) {//wait for button press
-                        Serial1.println("ar2:startupLed3:0");
-                        digitalWrite(digitalRelay6, LOW);
-                        digitalWrite(digitalRelay5, HIGH);//TODO CHECK THIS CHECK THIS
-                        digitalWrite(digitalRelay4, LOW);
-                        startupSequence = 5;
-                        Serial.println("Opened relays discharge,precharge");
-                        Serial.println("Closed relay 4");
-                        Serial.println("Place IMD bypass switch down");
-                    }
+                    startupSequence = 5;
+                    Serial1.println("ar2:startup:5");
+                    dashButtonPressedMemory = false;
+                    Serial.println("Press the start button");
                 }
             }
+
             if (startupSequence == 5) {
-                if (dashSwitch1Val == 0) {//wait till init switch is down
+                if (dashButtonPressedMemory) {//wait for button press
+                    digitalWrite(digitalRelay5, LOW);
+                    digitalWrite(digitalRelay6, HIGH);//TODO CHECK THIS CHECK THIS
+                    dashButtonPressedMemory = false;
+                    //Prep for next section
                     startupSequence = 6;
-                    Serial.println("IMD switch down");
-                    Serial.println("Press start button to activate tractive system");
+                    Serial1.println("ar2:startup:6");
+                    Serial.println("Opened relays discharge,precharge");
+                    Serial.println("Closed relay 4");
+                    Serial.println("Place IMD bypass switch down");
+                    Serial.println("Place init switch to neutral");
                 }
             }
             if (startupSequence == 6) {
-                if (dashSwitch2Val == 1) {//wait till init button is pressed again
-                    runLoop = millis() + 2000;
-                    Serial.println("Playing ready 2 drive sound");
+                if (dashSwitch2Val == 1) {//wait till init switch is neutral
+                    //Prep for next section
                     startupSequence = 7;
+                    Serial1.println("ar2:startup:7");
+                    dashButtonPressedMemory = false;
+                    Serial.println("init switch neutral");
+                    Serial.println("Press start button to activate tractive system");
                 }
             }
-            if (startupSequence == 7 && runLoop > millis()) {
+            if (startupSequence == 7) {
+                if (dashButtonPressedMemory) {//wait till init button is pressed again
+                    runLoop = millis() + 2000;
+                    Serial.println("Playing ready 2 drive sound");
+                    //Prep for next section
+                    startupSequence = 8;
+                    Serial1.println("ar2:startup:8");
+                }
+            }
+            if (startupSequence == 8 && runLoop > millis()) {
                 //Ready to drive sound
-                //tone(digitalReady2DriveSound, startupNote);
-                //startupNote += 2;
                 digitalWrite(digitalReady2DriveSound, LOW);
             }
-            if (startupSequence == 7 && runLoop < millis()) {
+            if (startupSequence == 8 && runLoop < millis()) {
                 digitalWrite(digitalReady2DriveSound, HIGH);
+                digitalWrite(digitalRelay7, LOW);//Enable throttle encoding
                 Serial.println("Vehicle ready to drive");
                 Serial1.println("ar2:ready2Drive");
-                Serial1.println("ar3:ready2Drive");
                 //todo tell motor controller ready 2 drive
                 ready2Drive = true;
             }
@@ -286,17 +305,12 @@ void loop() {
             Serial.println(inputCmd1.substring(10));//todo make sure this works
         } else if (inputCmd1.substring(0,17) == "ar1:dashSwitches:") {
             char switchRead = inputCmd1.charAt(17);
-            dashSwitch1Val = switchRead - '0';//todo make sure char to int conversion works
+            dashSwitch2Val = switchRead - '0';//todo make sure char to int conversion works
             switchRead = inputCmd1.charAt(18);
-            dashSwitch2Val = switchRead - '0';
-            switchRead = inputCmd1.charAt(19);
-            dashSwitch3Val = switchRead - '0';
-            switchRead = inputCmd1.charAt(20);
-            dashSwitch4Val = switchRead - '0';
-        } else if (inputCmd1 == "ar1:brake:1") {
-            digitalWrite(digitalBrake, HIGH);
-        } else if (inputCmd1 == "ar1:brake:0") {
-            digitalWrite(digitalBrake, LOW);
+            dashButtonVal = switchRead - '0';
+            if (dashButtonVal = 1) {
+                dashButtonPressedMemory = true;
+            }
         }
     }
 
@@ -465,7 +479,7 @@ void serialEvent1() {//Receives commands from ar2
         if (newChar == '\n') {
             stringComplete1 = true;
             timeoutRx1 = millis() + 1000; //Number of milliseconds since program started, plus 1000, used to timeout if no complete command received for 1 second
-            Serial.println("recvd ar2: "+inputCmd1);
+            //Serial.println("recvd ar2: "+inputCmd1);
         }
         inputCmdStream1 += newChar;
     }
@@ -477,7 +491,7 @@ void serialEvent2() {//Receives commands from ar4. todo: might have problems if 
         if (newChar == '\n') {
             stringComplete2 = true;
             timeoutRx2 = millis() + 1000; //Number of milliseconds since program started, plus 1000, used to timeout if no complete command received for 1 second
-            Serial.println("recvd ar4: "+inputCmd2);
+            //Serial.println("recvd ar4: "+inputCmd2);
         }
         inputCmdStream2 += newChar;
 
@@ -490,7 +504,7 @@ void serialEvent3() {//Receives commands from ar5
         if (newChar == '\n') {
             stringComplete3 = true;
             timeoutRx3 = millis() + 1000; //Number of milliseconds since program started, plus 1000, used to timeout if no complete command received for 1 second
-            Serial.println("recvd ar5: "+inputCmd3);
+            //Serial.println("recvd ar5: "+inputCmd3);
         }
         inputCmdStream3 += newChar;
 
