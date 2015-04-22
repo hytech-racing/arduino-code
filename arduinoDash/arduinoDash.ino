@@ -81,7 +81,7 @@ void setup() {
     pinMode(analogButtonCycleDisplay, INPUT);
 
     //Wait 1 second for communication before throwing error
-    timeoutRx2 = 1000;
+    timeoutRx2 = 2000;
     runLoop = 0;
     tft.begin(HX8357D);
     initScreen(); // function defined below
@@ -141,22 +141,24 @@ void loop() {
         } else if (inputCmd2.substring(0,12) == "ar2:startup:") {
             String stage = inputCmd2.substring(12);
             errorClearTimestamp1 = 0;
-            if (stage == "0") {
-                writeError1("Init switch to neutral");
-            } else if (stage == "1") {
-                writeError1("Press init button");
+            if (stage == "1") {
+                writeError1("Put IMD byp switch up");
+                writeError2("Press init button");
             } else if (stage == "2") {
-                writeError1("Relays 1,3 closed");
+                writeError1("Relays 1,3,7 closed");
+                writeError2("");
             } else if (stage == "3") {
-                writeError1("Relays 2, precharge closed");
+                writeError1("Relays 2,8 closed");
             } else if (stage == "5") {
-                writeError1("Relay 4 closed, precharge open");
+                writeError1("Press init button");
             } else if (stage == "6") {
-                writeError1("Init switch to neutral");
+                writeError1("Relay 4 closed, 8 open");
             } else if (stage == "7") {
-                writeError1("Press init button to start");
+                writeError1("Put IMD byp switch down");
+                writeError2("Press init button to start");
             } else if (stage == "8") {
-                writeError1("Ready to drive sound active");
+                writeError1("Ready to drive sound");
+                writeError2("");
             }
         }
     }

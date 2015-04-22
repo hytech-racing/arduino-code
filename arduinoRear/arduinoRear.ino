@@ -130,7 +130,7 @@ void setup() {
     digitalWrite(digitalPumpFan, HIGH);//Turn on cooling fan
 
     //Wait 1 second for communication before throwing error
-    timeoutRx1 = 1000;
+    timeoutRx1 = 2000;
     timeoutRx2 = 1000;
     timeoutRx3 = 1000;
     runLoop = 0;
@@ -182,17 +182,8 @@ void loop() {
         }
         if (eepromChecked && eepromCheckGood) {//Eeprom check is finished
             if (startupSequence == 0) {
-                if (dashSwitch2Val != -1 && dashSwitch2Val != 1) {//Init switch is not neutral
-                    if (!startupSequencePrinted) {
-                        startupSequencePrinted = true;
-                        Serial1.println("ar2:startup:0");
-                        Serial.println("Init switch in improper position");
-                    }
-                }
-                if (dashSwitch2Val == 1) {//Init switch is neutral
-                    startupSequencePrinted = false;
+                if (dashButtonVal == 0) {
                     Serial1.println("ar2:startup:1");
-                    Serial.println("Init switch in proper position");
                     startupSequence = 1;
                     //Prep for next section
                     dashButtonPressedMemory = false;
@@ -204,7 +195,6 @@ void loop() {
                 //Begin startup sequence
                 if (dashButtonPressedMemory) {//wait for init button to continue
                     dashButtonPressedMemory = false;
-                    startupSequencePrinted = false;
                     Serial.println("Startup sequence activated");
                     //Prep for next section
                     startupSequence = 2;
@@ -249,23 +239,17 @@ void loop() {
                     digitalWrite(digitalRelay8, HIGH);//TODO CHECK THIS CHECK THIS
                     dashButtonPressedMemory = false;
                     //Prep for next section
+                    runLoop = millis() + 3000;
                     startupSequence = 6;
                     Serial1.println("ar2:startup:6");
-                    Serial.println("Opened relays discharge,precharge");
+                    Serial.println("Opened relay precharge");
                     Serial.println("Closed relay 4");
                     Serial.println("Place IMD bypass switch down");
-                    Serial.println("Place init switch to neutral");
                 }
             }
-            if (startupSequence == 6) {
-                if (dashSwitch2Val == 1) {//wait till init switch is neutral
-                    //Prep for next section
-                    startupSequence = 7;
-                    Serial1.println("ar2:startup:7");
-                    dashButtonPressedMemory = false;
-                    Serial.println("init switch neutral");
-                    Serial.println("Press start button to activate tractive system");
-                }
+            if (startupSequence == 6 && runLoop < millis()) {//Wait 3 seconds
+                startupSequence = 7;
+                Serial1.println("ar2:startup:7");
             }
             if (startupSequence == 7) {
                 if (dashButtonPressedMemory) {//wait till init button is pressed again
