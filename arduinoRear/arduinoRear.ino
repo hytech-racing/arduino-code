@@ -13,10 +13,10 @@ int digitalRelay1 = 2;
 int digitalRelay2 = 3;
 int digitalRelay3 = 4;
 int digitalRelay4 = 5;
-int digitalRelay5 = 9;
-int digitalRelay6 = 8;
-int digitalRelay7 = 7;
-int digitalReady2DriveSound = 6; //Relay 8
+int digitalRelay5 = 6; //Ready to drive sound
+int digitalRelay6 = 7; //Throttle control
+int digitalRelay7 = 8; //Discharge
+int digitalRelay8 = 9; //Precharge
 int digitalImd = 32; // PWM read pin
 int digitalTransistor4 = 46;
 int digitalBrake = 48; //transistor3
@@ -119,8 +119,8 @@ void setup() {
     digitalWrite(digitalRelay6, HIGH);
     pinMode(digitalRelay7, OUTPUT);
     digitalWrite(digitalRelay7, HIGH);
-    pinMode(digitalReady2DriveSound, OUTPUT);
-    digitalWrite(digitalReady2DriveSound, HIGH);
+    pinMode(digitalRelay8, OUTPUT);
+    digitalWrite(digitalRelay8, HIGH);
     pinMode(digitalImd, OUTPUT);//todo output or input?
     pinMode(digitalTransistor4, OUTPUT);
     pinMode(digitalBrake, OUTPUT);
@@ -134,6 +134,7 @@ void setup() {
     timeoutRx2 = 1000;
     timeoutRx3 = 1000;
     runLoop = 0;
+    Serial1.println();
 }
 
 void loop() {
@@ -143,21 +144,28 @@ void loop() {
 
     if (!ready2Drive) {
         if (!eepromChecked) {//Runs on startup and after high voltage shutdowns
-            //Check if EEPROM error code was set
-            eepromErrCode = EEPROM.read(10);
-            if (eepromErrCode == 255){
-                eepromCheckGood = true;
-                Serial.println("No fault recorded in memory");
+            if (analogRead(analogImdBmsFaultReset) < 10) {
+                Serial1.println("ar2:faultSwitchBad:0");
+                //Check if EEPROM error code was set
+                eepromErrCode = EEPROM.read(10);
+                if (eepromErrCode == 255){
+                    eepromCheckGood = true;
+                    Serial.println("No fault recorded in memory");
+                }
+                if (eepromErrCode == 1) {
+                    Serial1.println("ar2:amsBmsFaultLed:1");//Make dash Arduino turn on error light
+                    Serial.println("BMS fault - please reset");
+                }
+                if (eepromErrCode == 2) {
+                    Serial1.println("ar2:imdFaultLed:1");//Make dash Arduino turn on error light
+                    Serial.println("IMD fault - please reset");
+                }
+                eepromChecked = true;
+            } else {
+                //IMD BMS fault switch not neutral
+                Serial1.println("ar2:faultSwitchBad:1");
+                Serial.println("Rear fault switch not neutral");
             }
-            if (eepromErrCode == 1) {
-                Serial1.println("ar2:amsBmsFaultLed:1");//Make dash Arduino turn on error light
-                Serial.println("BMS fault - please reset");
-            }
-            if (eepromErrCode == 2) {
-                Serial1.println("ar2:imdFaultLed:1");//Make dash Arduino turn on error light
-                Serial.println("IMD fault - please reset");
-            }
-            eepromChecked = true;
         }
         if (!eepromCheckGood) {//While there is an un reset eeprom error
             if (analogRead(analogImdBmsFaultReset) > 1000) {
@@ -205,6 +213,8 @@ void loop() {
             }
             if (startupSequence == 2) {
                 //Close relays 1, 3
+                //Open Discharge
+                digitalWrite(digitalRelay7, LOW);//Opens discharge
                 digitalWrite(digitalRelay1, LOW);
                 digitalWrite(digitalRelay3, LOW);
                 runLoop = millis() + 1000;
@@ -216,7 +226,7 @@ void loop() {
             if (startupSequence == 3 && runLoop < millis()) {//At least 1 second has passed since sequence part 1
                 //Close relays 2, precharge
                 digitalWrite(digitalRelay2, LOW);
-                digitalWrite(digitalRelay5, LOW);
+                digitalWrite(digitalRelay8, LOW);
                 runLoop = millis() + 3000;
                 Serial.println("Closed relays 2, precharge");
                 //Prep for next section
@@ -235,8 +245,8 @@ void loop() {
 
             if (startupSequence == 5) {
                 if (dashButtonPressedMemory) {//wait for button press
-                    digitalWrite(digitalRelay5, LOW);
-                    digitalWrite(digitalRelay6, HIGH);//TODO CHECK THIS CHECK THIS
+                    digitalWrite(digitalRelay4, LOW);
+                    digitalWrite(digitalRelay8, HIGH);//TODO CHECK THIS CHECK THIS
                     dashButtonPressedMemory = false;
                     //Prep for next section
                     startupSequence = 6;
@@ -268,11 +278,11 @@ void loop() {
             }
             if (startupSequence == 8 && runLoop > millis()) {
                 //Ready to drive sound
-                digitalWrite(digitalReady2DriveSound, LOW);
+                digitalWrite(digitalRelay5, LOW);
             }
             if (startupSequence == 8 && runLoop < millis()) {
-                digitalWrite(digitalReady2DriveSound, HIGH);
-                digitalWrite(digitalRelay7, LOW);//Enable throttle encoding
+                digitalWrite(digitalRelay5, HIGH);
+                digitalWrite(digitalRelay6, LOW);//Enable throttle encoding
                 Serial.println("Vehicle ready to drive");
                 Serial1.println("ar2:ready2Drive");
                 //todo tell motor controller ready 2 drive
@@ -545,10 +555,8 @@ void reset(int errCode) {
     startupSequence = 0;//Reset the startup sequence
     eepromChecked = false;
     eepromCheckGood = false;
-    dashSwitch1Val = -1;//Init values of -1
-    dashSwitch2Val = -1;
-    dashSwitch3Val = -1;
-    dashSwitch4Val = -1;
+    dashSwitch2Val = -1;//Init values of -1
+    dashButtonVal = -1;
 }
 
 /*ALL SHUTDOWNS

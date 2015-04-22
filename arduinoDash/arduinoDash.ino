@@ -55,7 +55,12 @@ int rpmVal = -1; // not sure if we will read in the values for RPM or not
 
 boolean ready2Drive = false;//Set to false on startup and soft restart
 boolean resetLoop = false;//Run stuff after restart
+unsigned long errorClearTimestamp1 = 0;
+unsigned long errorClearTimestamp2 = 0;
+unsigned long errorClearTimestamp3 = 0;
 unsigned long resetTimestamp = 0;
+unsigned long timeSinceReset = 0;
+
 
 int dashSwitch2Val = -1;
 int dashButtonVal = -1;
@@ -100,6 +105,8 @@ void loop() {
             reset();
         } else if (inputCmd2 == "ar2:ready2Drive") {
             ready2Drive = true;
+            writeError1("Ready to drive");
+            errorClearTimestamp1 = millis() + 5000;
         } else if (inputCmd2 == "ar2:hi") {
             Serial1.print("ar1:hi");
         } else if (inputCmd2 == "ar2:imdFaultLed:1") {
@@ -131,6 +138,26 @@ void loop() {
         } else if (inputCmd2.substring(0,10) == "ar2:temp1:") {
             //todo put temperatures on screen
             temp1Val = inputCmd2.substring(10).toInt();
+        } else if (inputCmd2.substring(0,12) == "ar2:startup:") {
+            String stage = inputCmd2.substring(12);
+            errorClearTimestamp1 = 0;
+            if (stage == "0") {
+                writeError1("Init switch to neutral");
+            } else if (stage == "1") {
+                writeError1("Press init button");
+            } else if (stage == "2") {
+                writeError1("Relays 1,3 closed");
+            } else if (stage == "3") {
+                writeError1("Relays 2, precharge closed");
+            } else if (stage == "5") {
+                writeError1("Relay 4 closed, precharge open");
+            } else if (stage == "6") {
+                writeError1("Init switch to neutral");
+            } else if (stage == "7") {
+                writeError1("Press init button to start");
+            } else if (stage == "8") {
+                writeError1("Ready to drive sound active");
+            }
         }
     }
     if (runLoop < millis()) {//Runs whether or not car is ready to drive
@@ -152,18 +179,27 @@ void loop() {
             tft.print(rpmVal); // if we ever get an rpm value
 
         } else if (cycleDisplay == 2) {
-            //need to decide on an alternate display
-            tft.setCursor(280, 10);
-            tft.print(torqueVal);
-            tft.setCursor(280, 100);
-            tft.print(rpmVal); // if we ever get an rpm value
-        }
-        
-        /*if (resetLoop && resetTimestamp + 5000 < millis() ) {
             initScreen();
-            resetLoop = false;
-        }*/
-        
+            cycleDisplay = 1;
+        }
+
+        if (errorClearTimestamp1 != 0 && errorClearTimestamp1 < millis()) {
+            writeError1("");
+        }
+        if (errorClearTimestamp2 != 0 && errorClearTimestamp2 < millis()) {
+            writeError2("");
+        }
+        if (errorClearTimestamp3 != 0 && errorClearTimestamp3 < millis()) {
+            writeError3("");
+        }
+
+        if (resetTimestamp != 0) {
+            timeSinceReset = millis() - resetTimestamp;
+            timeSinceReset /= 1000;
+            String error3 = "Time since reset: " + String(timeSinceReset);
+            writeError3(error3);
+        }
+
         serialTimeout();
     }
 }
@@ -175,13 +211,8 @@ void serialTimeout() {
         Serial2.println("ar1:print:ar2 lost connection to ar1");
         Serial2.println("ar1:restart");
         reset();
-
-        tft.setTextColor(0xF800);
-        tft.setCursor(10, 265);
-        tft.setTextSize(4);
-        tft.print("Serial conn. lost");
-        tft.setTextSize(6);//Put size and color back to normal
-        tft.setTextColor(0x0000);
+        writeError2("Serial conn. lost");
+        errorClearTimestamp2 = millis() + 10000;//Keep error on screen 10 seconds
     }
 }
 
@@ -198,32 +229,26 @@ void SerialEvent2() {
 
 void initScreen() {
     tft.setRotation(1);
-    tft.fillScreen(0xFFFF);
+    tft.fillScreen(0xD5A8);
     tft.setCursor(10, 10);
-    tft.setTextColor(0x0000, 0xD5A8); // black text on old gold screen
+    tft.setTextColor(0x0000); // black text on old gold screen
     tft.setTextSize(6);
-    tft.print("Torque: ");
+    tft.print("Torque:");
     tft.setCursor(10, 100);
-    tft.print("RPM: ");
-    /*tft.setCursor(10, 160);
-    tft.print("ERR ");*/
+    tft.print("RPM:");
     tft.setTextSize(1);
     tft.setCursor(10, 300);
-    tft.setTextColor(0xFFFF, 0xD5A8);
     tft.print("HyTech Racing 2015. You can't get much more ramblin' than this");
-    tft.setTextColor(0x0000, 0xD5A8);
+    tft.setTextColor(0x0000);
     tft.setTextSize(6);
 }
 
 void reset() {
     ready2Drive = false;
     resetLoop = true;
+    errorClearTimestamp1 = millis() + 5000;
     resetTimestamp = millis();
-    tft.setCursor(10, 200);
-    tft.setTextSize(5);
-    tft.print("Vehicle reset");
-    tft.setTextSize(6);//Put size and color back to normal
-    tft.setTextColor(0x0000);
+    writeError1("Vehicle reset");
     //todo reset stuff like error LEDs (also make sure ar1 sends errors after this loop runs)
     //todo this part might need to happen on a soft restart below
     digitalWrite(ledPinImdFault, LOW);
@@ -232,6 +257,46 @@ void reset() {
     digitalWrite(ledPinSwitch2, LOW);
     digitalWrite(ledPinSwitch4, LOW);
     digitalWrite(ledPinSwitch5, LOW);
+    dashSwitch2Val = -1;
+    dashButtonVal = -1;
+}
+
+void writeError1(String error) {//Display an error on screen
+    if (error.length() > 14) {
+        tft.setTextSize(4);
+    } else {
+        tft.setTextSize(5);
+    }
+    tft.fillRect(0,150,480,50,0xD5A8);//Fill from 150 to 200
+    tft.setCursor(10,155);
+    tft.setTextColor(0xF800);
+    tft.print(error);
+    tft.setTextSize(6);
+    tft.setTextColor(0x0000);
+}
+
+void writeError2(String error) {
+    if (error.length() > 14) {
+        tft.setTextSize(4);
+    } else {
+        tft.setTextSize(5);
+    }
+    tft.fillRect(0,200,480,50,0xD5A8);//Fill from 200 to 250
+    tft.setCursor(10,210);
+    tft.setTextColor(0xF800);
+    tft.print(error);
+    tft.setTextSize(6);
+    tft.setTextColor(0x0000);
+}
+
+void writeError3(String error) {
+    tft.fillRect(0,250,480,50,0xD5A8);//Fill from 250 to 300
+    tft.setCursor(10,260);
+    tft.setTextSize(3);
+    tft.setTextColor(0xF800);
+    tft.print(error);
+    tft.setTextSize(6);
+    tft.setTextColor(0x0000);
 }
 
 void checkSwitches() {
