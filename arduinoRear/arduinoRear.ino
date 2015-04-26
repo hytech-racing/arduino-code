@@ -22,6 +22,10 @@ int digitalTransistor4 = 46;
 int digitalBrake = 48; //transistor3
 int digitalTransistor2 = 50;
 int digitalPumpFan = 52; //transistor1
+int mux8 = 40;
+int mux4 = 28;
+int mux2 = 36;
+int mux1 = 34;
 int analogHSOK = 7;
 int analogAmbientTemp = 8; //todo
 int analogDCDCTemp = 9; //todo
@@ -29,6 +33,7 @@ int analogImdBmsFaultReset = 11;
 int analogThermistor1 = 12;
 int analogThermistor2 = 13;
 int analogThermistor3 = 14;
+int analogLVBatt = 15;
 int analogMotorCtrlTemp; //todo find pin number
 int analogCheckShutdownButtons; //todo find pin number
 int analogCheckDcDc; //todo find pin number
@@ -56,6 +61,10 @@ int pot2High = 462;
 int pot2Low = 226;
 int pot3High = 468;//Pot3 used for brake
 int pot3Low = 336;
+int i = 0; // for the LV battery read loop
+int j = 1; // also for LV battery read loop
+int lvbatt[] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}; // for LV battery analog readings
+boolean LVBattProblem = false;
 
 /*************************************
 END CONFIGURATION
@@ -101,9 +110,9 @@ void setup() {
     Serial1.begin(115200);//ar2
     Serial2.begin(115200);//ar4
     Serial3.begin(115200);//ar5
-    inputCmdStream1.reserve(50);
-    inputCmdStream2.reserve(50);
-    inputCmdStream3.reserve(50);
+    inputCmdStream1.reserve(100);
+    inputCmdStream2.reserve(100);
+    inputCmdStream3.reserve(100);
     //Initialize output pins
     pinMode(digitalRelay1, OUTPUT);
     digitalWrite(digitalRelay1, HIGH);
@@ -130,18 +139,14 @@ void setup() {
     digitalWrite(digitalPumpFan, HIGH);//Turn on cooling fan
 
     //Wait 1 second for communication before throwing error
-    timeoutRx1 = 2000;
-    timeoutRx2 = 1000;
-    timeoutRx3 = 1000;
+    timeoutRx1 = 5000;
+    timeoutRx2 = 5000;
+    timeoutRx3 = 5000;
     runLoop = 0;
     Serial1.println();
 }
 
 void loop() {
-    serialEvent1();
-    serialEvent2();
-    serialEvent3();
-
     if (!ready2Drive) {
         if (!eepromChecked) {//Runs on startup and after high voltage shutdowns
             if (analogRead(analogImdBmsFaultReset) < 10) {
@@ -253,6 +258,7 @@ void loop() {
             }
             if (startupSequence == 7) {
                 if (dashButtonPressedMemory) {//wait till init button is pressed again
+                    dashButtonPressedMemory = false;
                     runLoop = millis() + 2000;
                     Serial.println("Playing ready 2 drive sound");
                     //Prep for next section
@@ -269,7 +275,7 @@ void loop() {
                 digitalWrite(digitalRelay6, LOW);//Enable throttle encoding
                 Serial.println("Vehicle ready to drive");
                 Serial1.println("ar2:ready2Drive");
-                //todo tell motor controller ready 2 drive
+                digitalWrite(digitalRelay6, LOW);
                 ready2Drive = true;
             }
         }
@@ -332,7 +338,6 @@ void loop() {
     }
     if (runLoop < millis()) {//Runs 10x per second
         runLoop = millis() + 100;//Push runLoop up 100 ms
-        Serial1.println("ar2:hi");
         Serial1.print("ar2:throttle:");
         Serial1.println(torqueValAdjusted);
 
@@ -439,6 +444,73 @@ void loop() {
         /******************************
         End throttle reading code
         ******************************/
+
+        /****************************
+        Begin Low Voltage Battery Reading Code
+        ***************************/
+        j = 0;
+        for(i = 0; i < 16; i++) {// turns on the mux pins
+          digitalWrite(mux8, LOW);
+          digitalWrite(mux4, LOW);
+          digitalWrite(mux2, LOW);
+          digitalWrite(mux1, LOW);
+          if (i == 9 || i == 2 || i == 1 || i == 0){
+          }
+          else {
+            if ((i | 0x08) == 0x08) { // 8s place
+              digitalWrite(mux8, HIGH);
+            }
+            if((i | 0x04) == 0x04) { // 4s place
+              digitalWrite(mux4, HIGH);
+            }
+            if((i | 0x04) == 0x04) { // you get the idea
+              digitalWrite(mux2, HIGH);
+            }
+            if((i | 0x04) == 0x04) {
+              digitalWrite(mux1, HIGH);
+            }
+            delay(1); // let the signal propogate
+            lvbatt[11-j] = analogRead(analogLVBatt); // so that results go in low cell to high cell
+            if ((lvbatt[j] < 614) && (i == 15 || i == 8)) { // this checks if the lowest cell is too low
+              LVBattProblem = true;
+            }
+
+
+
+            j++;
+          }
+        }
+        for( i = 0; i < 6; i++) {
+          lvbatt[i] = lvbatt[i]*(i+1); // so that we get actual voltages
+        }
+        for( i = 6; i < 12; i++) {
+          lvbatt[i] = lvbatt[i]*(i-5); // so that we get actual voltages
+        }
+        // we don't want any one cell to have less that 3 volts (614 in arduino terms)
+        for(i = 1; i < 6; i++) {
+          if((lvbatt[i] - lvbatt[i-1]) < 614) { // checks first battery
+            LVBattProblem = true;
+          }
+        }
+        for(i = 7; i < 12; i++) {
+          if((lvbatt[i] - lvbatt[i-1]) < 614) { // checks second battery
+            LVBattProblem = true;
+          }
+        }
+        if(LVBattProblem) {
+          Serial.println("LV Battery Fault");
+        }
+        else {
+          Serial.println("LV Battery is fine");
+        }
+        for(i = 0; i < 12; i++) {
+          Serial.print(lvbatt[i]);
+          Serial.write(32);
+        }
+        Serial.println("  ");
+        /*********************************
+        End LV Batery Reading Code
+        **********************************/
 
         //todo Anything else this Arduino needs to do other than process received data
     }

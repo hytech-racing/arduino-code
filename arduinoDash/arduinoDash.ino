@@ -41,6 +41,10 @@ int analogButtonCycleDisplay = 7;
 END CONFIGURATION
 *************************************/
 
+String inputCmdStream0 = "";
+boolean stringComplete0 = false;
+String inputCmd0;
+
 String inputCmdStream2 = "";
 boolean stringComplete2 = false;
 String inputCmd2;
@@ -61,6 +65,9 @@ unsigned long errorClearTimestamp3 = 0;
 unsigned long resetTimestamp = 0;
 unsigned long timeSinceReset = 0;
 
+int error1Size;
+int error2Size;
+
 
 int dashSwitch2Val = -1;
 int dashButtonVal = -1;
@@ -68,7 +75,8 @@ boolean sendSwitchValsThisLoop = false;
 
 void setup() {
     Serial2.begin(115200);//Talk to ar1
-    inputCmdStream2.reserve(50);
+    Serial.begin(115200);//Print back to computer
+    inputCmdStream2.reserve(100);
     pinMode(ledPinImdFault, OUTPUT);
     pinMode(ledPinBmsFault, OUTPUT);
     pinMode(ledPinSwitch1, OUTPUT);
@@ -81,7 +89,7 @@ void setup() {
     pinMode(analogButtonCycleDisplay, INPUT);
 
     //Wait 1 second for communication before throwing error
-    timeoutRx2 = 2000;
+    timeoutRx2 = 5000;
     runLoop = 0;
     tft.begin(HX8357D);
     initScreen(); // function defined below
@@ -90,7 +98,6 @@ void setup() {
 
 void loop() {
     checkSwitches();
-    SerialEvent2();
     if (stringComplete2) {//Recieved something from ar1
         int newLineIndex = inputCmdStream2.indexOf('\n');
         if (newLineIndex > -1) {//Newline is found
@@ -100,15 +107,19 @@ void loop() {
         if (inputCmdStream2.indexOf('\n') == -1) {//No more complete commands
             stringComplete2 = false;
         }
+        Serial.println(inputCmd2);
         if (inputCmd2.substring(0,11) == "ar2:restart") {
             //Restarting vehicle
             reset();
+        } else if (inputCmd2.substring(0,13) == "ar2:throttle:") {
+            torqueVal = inputCmd2.substring(13).toInt();
+        } else if (inputCmd2.substring(0,10) == "ar2:temp1:") {
+            //todo put temperatures on screen
+            temp1Val = inputCmd2.substring(10).toInt();
         } else if (inputCmd2 == "ar2:ready2Drive") {
             ready2Drive = true;
             writeError1("Ready to drive");
             errorClearTimestamp1 = millis() + 5000;
-        } else if (inputCmd2 == "ar2:hi") {
-            Serial1.print("ar1:hi");
         } else if (inputCmd2 == "ar2:imdFaultLed:1") {
             digitalWrite(ledPinImdFault, HIGH);
         } else if (inputCmd2 == "ar2:imdFaultLed:0") {
@@ -133,37 +144,44 @@ void loop() {
             digitalWrite(ledPinSwitch5, HIGH);
         } else if (inputCmd2 == "ar2:ledSwitch5:0") {
             digitalWrite(ledPinSwitch5, LOW);
-        } else if (inputCmd2.substring(0,13) == "ar2:throttle:") {
-            torqueVal = inputCmd2.substring(13).toInt();
-        } else if (inputCmd2.substring(0,10) == "ar2:temp1:") {
-            //todo put temperatures on screen
-            temp1Val = inputCmd2.substring(10).toInt();
         } else if (inputCmd2.substring(0,12) == "ar2:startup:") {
             String stage = inputCmd2.substring(12);
             errorClearTimestamp1 = 0;
             if (stage == "1") {
-                writeError1("Put IMD byp switch up");
+                writeError1("IMD byp switch up");
                 writeError2("Press init button");
             } else if (stage == "2") {
-                writeError1("Relays 1,3,7 closed");
+                writeError1("Relays 1,3,7 close");
                 writeError2("");
             } else if (stage == "3") {
-                writeError1("Relays 2,8 closed");
+                writeError1("Relays 2,8 close");
             } else if (stage == "5") {
                 writeError1("Press init button");
             } else if (stage == "6") {
-                writeError1("Relay 4 closed, 8 open");
+                writeError1("Relay 4 close 8 opn");
             } else if (stage == "7") {
-                writeError1("Put IMD byp switch down");
-                writeError2("Press init button to start");
+                writeError1("IMD byp switch down");
+                writeError2("Press init button");
             } else if (stage == "8") {
-                writeError1("Ready to drive sound");
+                writeError1("Ready 2 drive sound");
                 writeError2("");
             }
         }
     }
+    /*if (stringComplete0) {//Recieved something from ar1
+        int newLineIndex = inputCmdStream0.indexOf('\n');
+        if (newLineIndex > -1) {//Newline is found
+            inputCmd0 = inputCmdStream0.substring(0, newLineIndex);
+            inputCmdStream0 = inputCmdStream0.substring(newLineIndex + 1);
+        }
+        if (inputCmdStream0.indexOf('\n') == -1) {//No more complete commands
+            stringComplete0 = false;
+        }
+        Serial.println(inputCmd0);
+        torqueVal = inputCmd0.toInt();
+    }*/
     if (runLoop < millis()) {//Runs whether or not car is ready to drive
-        runLoop = millis() + 100;//Push runLoop up 100 ms
+        runLoop = millis() + 250;//Push runLoop up 250 ms
 
         if (digitalRead(analogButtonCycleDisplay) == HIGH) {//If cycle display button is pressed
             if (cycleDisplay == 1) {
@@ -177,8 +195,10 @@ void loop() {
         if (cycleDisplay == 1) {//Default view
             tft.setCursor(270, 10);
             tft.print(torqueVal);
+            tft.print("  ");
             tft.setCursor(270, 100);
             tft.print(rpmVal); // if we ever get an rpm value
+            tft.print("  ");
 
         } else if (cycleDisplay == 2) {
             initScreen();
@@ -215,17 +235,28 @@ void serialTimeout() {
         reset();
         writeError2("Serial conn. lost");
         errorClearTimestamp2 = millis() + 10000;//Keep error on screen 10 seconds
+        timeoutRx2 = millis() + 1000;
     }
 }
 
-void SerialEvent2() {
-    while (Serial2.available()) {
+void serialEvent2() {
+    while (Serial2.available() > 0) {
         char newChar = (char)Serial2.read();
         if (newChar == '\n') {
             stringComplete2 = true;
             timeoutRx2 = millis() + 1000; //Number of milliseconds since program started, plus 1000, used to timeout if no complete command received for 1 second
         }
         inputCmdStream2 += newChar;
+    }
+}
+
+void serialEvent() {
+    while (Serial.available() > 0) {
+        char newChar = (char)Serial.read();
+        if (newChar == '\n') {
+            stringComplete0 = true;
+        }
+        inputCmdStream0 += newChar;
     }
 }
 
@@ -241,7 +272,7 @@ void initScreen() {
     tft.setTextSize(1);
     tft.setCursor(10, 300);
     tft.print("HyTech Racing 2015. You can't get much more ramblin' than this");
-    tft.setTextColor(0x0000);
+    tft.setTextColor(0x0000, 0xD5A8);
     tft.setTextSize(6);
 }
 
@@ -263,42 +294,91 @@ void reset() {
     dashButtonVal = -1;
 }
 
-void writeError1(String error) {//Display an error on screen
-    if (error.length() > 14) {
+void writeError1(String error, boolean fill) {//Display an error on screen
+    if (error1Size == 5 && error.length() > 14) {
+        fill = true;
+    } else if (error1Size == 4 && error.length() < 15) {
+        fill = true;
+    }
+    if (fill) {
+        tft.fillRect(0,150,480,50,0xD5A8);//Fill from 150 to 200
+    }
+    tft.setCursor(10,155);
+    tft.setTextColor(0xF800, 0xD5A8);
+        if (error.length() > 14) {
         tft.setTextSize(4);
+        error1Size = 4;
+        tft.print(error);
+        for (int i = error.length(); i < 19; i++) {
+            tft.print(" ");
+        }
     } else {
         tft.setTextSize(5);
+        error1Size = 5;
+        tft.print(error);
+        for (int i = error.length(); i < 15; i++) {
+            tft.print(" ");
+        }
     }
-    tft.fillRect(0,150,480,50,0xD5A8);//Fill from 150 to 200
-    tft.setCursor(10,155);
-    tft.setTextColor(0xF800);
-    tft.print(error);
     tft.setTextSize(6);
-    tft.setTextColor(0x0000);
+    tft.setTextColor(0x0000, 0xD5A8);
+}
+
+void writeError1(String error) {
+    writeError1(error, false);
+}
+
+void writeError2(String error, boolean fill) {
+    if (error2Size == 5 && error.length() > 14) {
+        fill = true;
+    } else if (error2Size == 4 && error.length() < 15) {
+        fill = true;
+    }
+    if (fill) {
+        tft.fillRect(0,200,480,50,0xD5A8);//Fill from 200 to 250
+    }
+    tft.setCursor(10,210);
+    tft.setTextColor(0xF800, 0xD5A8);
+    if (error.length() > 14) {
+        tft.setTextSize(4);
+        error2Size = 4;
+        tft.print(error);
+        for (int i = error.length(); i < 19; i++) {
+            tft.print(" ");
+        }
+    } else {
+        tft.setTextSize(5);
+        error2Size = 5;
+        tft.print(error);
+        for (int i = error.length(); i < 15; i++) {
+            tft.print(" ");
+        }
+    }
+    tft.setTextSize(6);
+    tft.setTextColor(0x0000, 0xD5A8);
 }
 
 void writeError2(String error) {
-    if (error.length() > 14) {
-        tft.setTextSize(4);
-    } else {
-        tft.setTextSize(5);
+    writeError2(error, false);
+}
+
+void writeError3(String error, boolean fill) {
+    if (fill) {
+        tft.fillRect(0,250,480,50,0xD5A8);//Fill from 250 to 300
     }
-    tft.fillRect(0,200,480,50,0xD5A8);//Fill from 200 to 250
-    tft.setCursor(10,210);
-    tft.setTextColor(0xF800);
+    tft.setCursor(10,260);
+    tft.setTextSize(3);
+    tft.setTextColor(0xF800, 0xD5A8);
     tft.print(error);
+    for (int i = error.length(); i < 26; i++) {
+        tft.print(" ");
+    }
     tft.setTextSize(6);
-    tft.setTextColor(0x0000);
+    tft.setTextColor(0x0000, 0xD5A8);
 }
 
 void writeError3(String error) {
-    tft.fillRect(0,250,480,50,0xD5A8);//Fill from 250 to 300
-    tft.setCursor(10,260);
-    tft.setTextSize(3);
-    tft.setTextColor(0xF800);
-    tft.print(error);
-    tft.setTextSize(6);
-    tft.setTextColor(0x0000);
+    writeError3(error, false);
 }
 
 void checkSwitches() {

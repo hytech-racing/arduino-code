@@ -29,6 +29,9 @@ int pot3Low = 336;
 float pot1ValAdjusted;
 float pot2ValAdjusted;
 float pot3ValAdjusted;
+float pot1LastAverage = 0;
+float pot2LastAverage = 0;
+float pot3LastAverage = 0;
 float potAccAdjDiff;//Holds the difference between two accelerator readings
 float pot1Range = pot1High - pot1Low;//Ranges that each pot will move (used for percentage calcs)
 float pot2Range = pot2High - pot2Low;
@@ -45,12 +48,30 @@ void setup() {
 
 void loop() {
     //Read analog values all at once
-    pot1ValAdjusted = analogRead(pot1) + analogRead(pot1) + analogRead(pot1);
-    pot2ValAdjusted = analogRead(pot2) + analogRead(pot2) + analogRead(pot2);
-    pot3ValAdjusted = analogRead(pot3) + analogRead(pot3) + analogRead(pot3);
-    pot1ValAdjusted /= 3;
-    pot2ValAdjusted /= 3;
-    pot3ValAdjusted /= 3;
+    pot1ValAdjusted = 0;
+    pot2ValAdjusted = 0;
+    pot3ValAdjusted = 0;
+    for (int i = 0; i < 10; i++) { //Take 10 readings for average
+        pot1ValAdjusted += analogRead(pot1);
+        pot2ValAdjusted += analogRead(pot2);
+        pot3ValAdjusted += analogRead(pot3);
+        delay(5);
+    }
+    pot1ValAdjusted /= 10; //Average these readings
+    pot2ValAdjusted /= 10;
+    pot3ValAdjusted /= 10;
+    
+    pot1ValAdjusted += pot1LastAverage; //Add to last averages
+    pot2ValAdjusted += pot2LastAverage;
+    pot3ValAdjusted += pot3LastAverage;
+    
+    pot1ValAdjusted /= 2; //Average last values and current values
+    pot2ValAdjusted /= 2;
+    pot3ValAdjusted /= 2;
+    
+    pot1LastAverage = pot1ValAdjusted; //Set current values to be used as last values next loop
+    pot2LastAverage = pot2ValAdjusted;
+    pot3LastAverage = pot3ValAdjusted;
 
     //Now calculate remapped values
     pot1ValAdjusted = pot1ValAdjusted - pot1Low;

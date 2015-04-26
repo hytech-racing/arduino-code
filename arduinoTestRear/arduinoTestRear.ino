@@ -13,14 +13,14 @@ int digitalRelay1 = 2;
 int digitalRelay2 = 3;
 int digitalRelay3 = 4;
 int digitalRelay4 = 5;
-int digitalRelay5 = 6;
-int digitalRelay6 = 7;
-int digitalRelay7 = 8;
-int digitalReady2DriveSound = 9; //Relay 8
+int digitalRelay5 = 6; //Ready to drive sound
+int digitalRelay6 = 7; //Throttle control
+int digitalRelay7 = 8; //Discharge
+int digitalRelay8 = 9; //Precharge
 int digitalImd = 32; // PWM read pin
 int digitalTransistor4 = 46;
 int digitalBrake = 48; //transistor3
-int digitalTransistor2 = 50; // DOES NOT WORK
+int digitalTransistor2 = 50;
 int digitalPumpFan = 52; //transistor1
 int mux8 = 40;
 int mux4 = 28;
@@ -66,7 +66,6 @@ int j = 1; // also for LV battery read loop
 int lvbatt[] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}; // for LV battery analog readings
 boolean LVBattProblem = false;
 
-
 /*************************************
 END CONFIGURATION
 *************************************/
@@ -100,15 +99,22 @@ boolean eepromChecked = false;//Used so eeprom checked only once when starting o
 boolean ready2Drive = false;
 int startupSequence = 0;//Holds startup stage
 int eepromErrCode = 0;//Holds eeprom error code
-int startupNote = 200;
-int dashSwitch1Val = -1;
+boolean startupSequencePrinted = false;//So stuff gets printed once per startup stage
 int dashSwitch2Val = -1;
-int dashSwitch3Val = -1;
-int dashSwitch4Val = -1;
+int dashButtonVal = -1;
+boolean dashButtonPressedMemory = false;//Remembers momentary button press till acted upon
 int newLineIndex;
+
+unsigned long test1SecLoop = 0;
 
 void setup() {
     Serial.begin(115200);//Talk back to computer
+    Serial1.begin(115200);//ar2
+    Serial2.begin(115200);//ar4
+    Serial3.begin(115200);//ar5
+    inputCmdStream1.reserve(100);
+    inputCmdStream2.reserve(100);
+    inputCmdStream3.reserve(100);
     //Initialize output pins
     pinMode(digitalRelay1, OUTPUT);
     digitalWrite(digitalRelay1, HIGH);
@@ -124,8 +130,8 @@ void setup() {
     digitalWrite(digitalRelay6, HIGH);
     pinMode(digitalRelay7, OUTPUT);
     digitalWrite(digitalRelay7, HIGH);
-    pinMode(digitalReady2DriveSound, OUTPUT);
-    digitalWrite(digitalReady2DriveSound, HIGH);
+    pinMode(digitalRelay8, OUTPUT);
+    digitalWrite(digitalRelay8, HIGH);
     pinMode(digitalImd, OUTPUT);//todo output or input?
     pinMode(digitalTransistor4, OUTPUT);
     pinMode(digitalBrake, OUTPUT);
@@ -133,34 +139,86 @@ void setup() {
     pinMode(digitalPumpFan, OUTPUT);
 
     digitalWrite(digitalPumpFan, HIGH);//Turn on cooling fan
+
+    //Wait 1 second for communication before throwing error
+    timeoutRx1 = 5000;
+    timeoutRx2 = 5000;
+    timeoutRx3 = 5000;
     runLoop = 0;
+    Serial1.println();
 }
 
 void loop() {
-    if (runLoop < millis()) {
-        runLoop += 300;
 
-        boolean writeEeprom = false;
-        if (!writeEeprom) {
-          EEPROM.write(10, 255);
-          writeEeprom = true;
+    /*************************************
+    Commands that run whether or not car is ready to drive
+    *************************************/
+    if (stringComplete1) {//Received command from AR2
+        newLineIndex = inputCmdStream1.indexOf('\n');
+        if (newLineIndex > -1) {//Newline is found
+            inputCmd1 = inputCmdStream1.substring(0, newLineIndex);
+            inputCmdStream1 = inputCmdStream1.substring(newLineIndex + 1);
         }
+        if (inputCmdStream1.indexOf('\n') == -1) {//No more complete commands
+            stringComplete1 = false;
+        }
+        if (inputCmd1 == "ar1:restart") {
+            reset(13);
+        } else if (inputCmd1.substring(0,10) == "ar1:print:") {
+            Serial.print(millis());
+            Serial.print(" - ");
+            Serial.println(inputCmd1.substring(10));//todo make sure this works
+        } else if (inputCmd1.substring(0,17) == "ar1:dashSwitches:") {
+            char switchRead = inputCmd1.charAt(17);
+            dashSwitch2Val = switchRead - '0';//todo make sure char to int conversion works
+            switchRead = inputCmd1.charAt(18);
+            dashButtonVal = switchRead - '0';
+            if (dashButtonVal = 1) {
+                dashButtonPressedMemory = true;
+            }
+        }
+    }
+
+    if (stringComplete2) {//Received command from ar4
+        newLineIndex = inputCmdStream2.indexOf('\n');
+        if (newLineIndex > -1) {//Newline is found
+            inputCmd2 = inputCmdStream2.substring(0, newLineIndex);
+            inputCmdStream2 = inputCmdStream2.substring(newLineIndex + 1);
+        }
+        if (inputCmdStream2.indexOf('\n') == -1) {//No more complete commands
+            stringComplete2 = false;
+        }
+        //Put stuff here
+    }
+    if (stringComplete3) {//Received command from ar5
+        newLineIndex = inputCmdStream3.indexOf('\n');
+        if (newLineIndex > -1) {//Newline is found
+            inputCmd3 = inputCmdStream3.substring(0, newLineIndex);
+            inputCmdStream3 = inputCmdStream3.substring(newLineIndex + 1);
+        }
+        if (inputCmdStream3.indexOf('\n') == -1) {//No more complete commands
+            stringComplete3 = false;
+        }
+        //Put stuff here
+    }
+    if (runLoop < millis()) {//Runs 4x per second
+        runLoop = millis() + 250;//Push runLoop up 250 ms
+        Serial1.print("ar2:throttle:");
+        Serial1.println(torqueValAdjusted);
+
+        //todo read motor/controller/water temp - pins A2-A3
+        //todo write error code if emergency buttons pressed? - pins A6-A10
+
+        //todo BMS shutdown
+        
+
         /******************************
         Throttle reading code
         ******************************/
         //Read analog values all at once
-        pot1ValAdjusted = analogRead(pot1) + analogRead(pot1) + analogRead(pot1);
-        pot2ValAdjusted = analogRead(pot2) + analogRead(pot2) + analogRead(pot2);
-        pot3ValAdjusted = analogRead(pot3) + analogRead(pot3) + analogRead(pot3);
-        pot1ValAdjusted /= 3;
-        pot2ValAdjusted /= 3;
-        pot3ValAdjusted /= 3;
-        Serial.print("Raw throttle readings: ");
-        Serial.print(pot1ValAdjusted);
-        Serial.write(32); // space
-        Serial.print(pot2ValAdjusted);
-        Serial.write(32);
-        Serial.println(pot3ValAdjusted);
+        pot1ValAdjusted = analogRead(pot1);
+        pot2ValAdjusted = analogRead(pot2);
+        pot3ValAdjusted = analogRead(pot3);
 
         if (pot1ValAdjusted > 1000 || pot1ValAdjusted < 10 || pot2ValAdjusted > 1000 || pot2ValAdjusted < 10) {
             reset(11);
@@ -199,10 +257,8 @@ void loop() {
 
         if (pot3ValAdjusted > 0) { //Brake light
             digitalWrite(digitalBrake, HIGH);
-            Serial.println("Brake ON");
         } else if (pot3ValAdjusted <= 0) {
             digitalWrite(digitalBrake, LOW);
-            Serial.println("Brake OFF");
         }
 
         if (potAccAdjDiff > 200) {//Acceleration error check (Die if 20%+ difference between readings)
@@ -230,6 +286,15 @@ void loop() {
         /******************************
         End throttle reading code
         ******************************/
+        
+        
+
+        //todo Anything else this Arduino needs to do other than process received data
+    }
+    
+    if (test1SecLoop < millis()) {
+        test1SecLoop = millis() + 1000;
+        
         
         /****************************
         Begin Low Voltage Battery Reading Code
@@ -297,11 +362,79 @@ void loop() {
         /*********************************
         End LV Batery Reading Code
         **********************************/
+    }
 
-        //todo Anything else this Arduino needs to do other than process received data
+    /*************************************
+    End always-run commands
+    *************************************/
+
+
+}
+
+void serialTimeout() {
+    if (timeoutRx1 < millis() || timeoutRx2 < millis() || timeoutRx3 < millis()) {//If 1 second has passed since receiving a complete command from all 3 connected Arduinos turn off low voltage ***SOMETHING HAS GONE WRONG***
+        Serial.println(millis());
+        if(timeoutRx1 < millis()) {
+            Serial.println("ar1 lost connection to ar2");
+        }
+        if(timeoutRx2 < millis()) {
+            Serial.println("ar1 lost connection to ar4");
+        }
+        if(timeoutRx3 < millis()) {
+            Serial.println("ar1 lost connection to ar5");
+        }
+        reset(10);
     }
 }
-void reset(int i) {
-    Serial.println("Oh noes!");
-    Serial.println(i);
+
+void serialEvent1() {//Receives commands from ar2
+    while (Serial1.available()) {
+        char newChar = (char)Serial1.read();
+        if (newChar == '\n') {
+            stringComplete1 = true;
+            timeoutRx1 = millis() + 1000; //Number of milliseconds since program started, plus 1000, used to timeout if no complete command received for 1 second
+            //Serial.println("recvd ar2: "+inputCmd1);
+        }
+        inputCmdStream1 += newChar;
+    }
+}
+
+void serialEvent2() {//Receives commands from ar4. todo: might have problems if receives while using inputCmdStream in arduino loop
+    while (Serial2.available()) {
+        char newChar = (char)Serial2.read();
+        if (newChar == '\n') {
+            stringComplete2 = true;
+            timeoutRx2 = millis() + 1000; //Number of milliseconds since program started, plus 1000, used to timeout if no complete command received for 1 second
+            //Serial.println("recvd ar4: "+inputCmd2);
+        }
+        inputCmdStream2 += newChar;
+
+    }
+}
+
+void serialEvent3() {//Receives commands from ar5
+    while (Serial3.available()) {
+        char newChar = (char)Serial3.read();
+        if (newChar == '\n') {
+            stringComplete3 = true;
+            timeoutRx3 = millis() + 1000; //Number of milliseconds since program started, plus 1000, used to timeout if no complete command received for 1 second
+            //Serial.println("recvd ar5: "+inputCmd3);
+        }
+        inputCmdStream3 += newChar;
+
+    }
+}
+
+void reset(int errCode) {
+    Serial.print(millis());
+    Serial.print(" - Shutting down - ");
+    Serial.println(errCode);//Now send to computer
+    Serial1.println("ar2:restart");
+    //todo ar4 & ar5 don't need to reset right?
+    ready2Drive = false;
+    startupSequence = 0;//Reset the startup sequence
+    eepromChecked = false;
+    eepromCheckGood = false;
+    dashSwitch2Val = -1;//Init values of -1
+    dashButtonVal = -1;
 }
